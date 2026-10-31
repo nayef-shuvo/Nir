@@ -1,0 +1,13 @@
+type P = struct { v: int }
+
+fn f(p: &mut P) -> int {
+    let snapshot = p
+    p.v = p.v + 1
+    return snapshot.v
+}
+
+fn main() {
+    let mut p = P { v = 10 }
+    print(f(&mut p))
+    print(p.v)
+}

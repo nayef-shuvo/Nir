@@ -802,11 +802,149 @@ unterminated plain and interpolated strings (the first one in the file), `"n" + 
 
 ---
 
-## Later slices (outline; detailed when each starts)
+## Slice 7: structs, methods, borrows
 
-**Slice 7: structs, methods, mutability by path.** `type P = struct {...}`, literals `P { x = 1 }`, field read/write,
-value semantics, `impl` blocks, `&self` / `&mut self` (compiled to CLR byref `this`), associated functions
-`P::new()`, `Self`. Design sections 2 to 5.
+**Goal.** Declare value types with fields and methods, and pass them by copy or by borrow.
+
+```
+type Point = struct {
+    x: int,
+    y: int,
+}
+
+Point impl {
+    fn new(x: int, y: int) -> Self {
+        return Self { x = x, y = y }
+    }
+
+    fn length_squared(&self) -> int {
+        return self.x * self.x + self.y * self.y
+    }
+
+    fn move_right(&mut self) {
+        self.x = self.x + 1
+    }
+}
+
+fn bump(p: &mut Point) {
+    p.y = p.y + 1
+}
+
+fn main() {
+    let mut p = Point::new(3, 4)
+    p.move_right()
+    bump(&mut p)
+    print(p.length_squared())      // 4*4 + 5*5 = 41
+    let q = p                      // a copy
+    p.x = 10
+    print(q.x)                     // 4
+}
+```
+
+**Decisions** are recorded in design.md sections 2, 3, 4, 5 and 6 and decisions.md D-058 to D-061.
+
+**Details fixed for this slice:**
+- Lexer. Keywords `type`, `struct`, `impl`, `self`; token `AMP` (`&`; `&&` stays `AMPAMP`). `SELF` is in `EndsStatement`.
+  `Self` is an ordinary identifier that the binder treats specially inside an `impl`.
+- Grammar. Top-level items: `usingDirective | functionDeclaration | structDeclaration | implDeclaration`.
+  `structDeclaration : TYPE name=IDENTIFIER EQ STRUCT LBRACE fieldList? RBRACE` with fields separated by `COMMA` or a
+  terminator. `implDeclaration : typeName=IDENTIFIER IMPL LBRACE (functionDeclaration separated by terminators)? RBRACE`.
+  A parameter list may start with a receiver `&self` or `&mut self`. A parameter type is `Name`, `&Name` or `&mut Name`.
+  Return types, field types and `let` annotations are plain names. New expressions: `Name { field = value, ... }` (struct
+  literal, guarded by a parser flag so it is not recognised in `if` / `while` / `for` heads outside parentheses),
+  `receiver.field` (field access, binds like a method call), `self`, and `&x` / `&mut x` (a prefix alternative at the level of
+  unary `-`). Assignment targets become `(name | self)(.field)*`.
+- AST. `StructDeclaration(Name, Fields)`, `FieldDeclaration(Name, Type)`, `ImplDeclaration(TypeName, Methods)`;
+  `FunctionDeclaration` gains `Receiver` (none, `&self`, `&mut self`); `Parameter.Type` becomes a `TypeReference(Name,
+  Borrow)`; `StructLiteralExpression(TypeName, Fields)` with `FieldInitializer(Name, Value)`,
+  `FieldAccessExpression(Receiver, Field)`, `SelfExpression`, `ReferenceExpression(Operand, IsMutable)`;
+  `AssignmentStatement.Target` becomes an expression (a name, `self`, or a chain of field accesses).
+- Types. `TypeSymbol` is no longer sealed. `StructTypeSymbol` has its fields (name, type, in declaration order) and its
+  methods; `BorrowTypeSymbol(Element, IsMutable)` is only the type of a borrow parameter, a receiver, or a borrow
+  expression. A struct is a value type whose CLR type is created by Emit; Emit keeps the map from struct symbol to CLR
+  type and never asks the symbol for it.
+- Binder. Struct and `impl` declarations are processed before functions and bodies, so order in the file does not matter.
+  Duplicate struct names, a struct named like a primitive type or `Program`, a field of unknown type, a repeated field and a
+  struct that contains itself are errors. `impl` for an unknown name is `NIR2006`; for a primitive, or a name that is not a
+  struct of this file, `NIR2014`. Several `impl` blocks for one struct merge; two methods with one name are `NIR2003`.
+  A method with `&self` / `&mut self` is an instance method, otherwise an associated function (`Point::new`). In an instance
+  method `self` is a borrow variable of the struct's type, and `Self` means the struct.
+  A struct literal needs every field once: unknown field is `NIR2011`, a repeated one `NIR2016`, a missing one `NIR2017`, a wrong
+  type `NIR3001`. A field read or write needs a struct (or a borrow of one) as receiver: `NIR2011` otherwise. A write needs a mutable
+  path: the root is `let mut`, `self` in `&mut self`, or a `&mut` borrow parameter; otherwise `NIR3002`.
+  A method call checks arity (`NIR2004`) and exact argument types (`NIR3001`) like a function. A `&mut self` method on an
+  immutable receiver is `NIR3002`; on a temporary (a call result) `NIR3013`. A call to an instance method as `Type::method` and
+  to an associated function as `value.method` are `NIR2011` with a message saying how to call it.
+  `&x` / `&mut x`: only as a direct argument (`NIR3014` elsewhere), only of a whole variable (`NIR3015`), `&mut` only of a
+  mutable one (`NIR3002`). A borrow parameter must be a struct (`NIR3017`). A parameter `&mut Point` accepts only an
+  argument written `&mut p`; `&Point` accepts `&p` or `&mut p`; a plain `Point` parameter rejects a borrow (`NIR3001`, with
+  a message that names the fix). A bare use of a borrow variable is an implicit copy of the struct (`BoundDereference`).
+  `self` outside a method with a receiver is `NIR2018`. A struct in an interpolation hole is `NIR3016`.
+- Emit. A struct is a public sealed CLR value type (base `System.ValueType`, sequential layout) in the global namespace with
+  public instance fields. Instance methods are instance methods of that type (CLR `this` is a managed pointer, so nothing is
+  boxed or copied); associated functions are static methods of the type. A free function stays a static method of `Program`.
+  A struct literal is a temporary local: `initobj`, then `ldloca; value; stfld` for each initializer in source order, then
+  `ldloc`. A place (a variable, `self`, a chain of fields) is emitted as an address: `ldloca` for a local, `ldarga` for a
+  by-value parameter, `ldarg` for a borrow (it already is an address), `ldflda` for each field step. A field read is the
+  address followed by `ldfld`; a write is the address, the value, `stfld`; an instance call is the address, the arguments,
+  `call`; a borrow argument is the address; a `BoundDereference` is `ldobj`. A call result used as a receiver goes through a
+  temporary. Parameters of an instance method start at argument 1.
+- Out of scope: `&` of anything but a whole struct variable, stored references, `==` / printing of structs, `with`, struct
+  fields that are borrows, generics, tuples, and calling Nir methods from C# beyond what the CLR gives for free.
+
+**New diagnostics.** `NIR2012` struct contains itself; `NIR2013` duplicate or reserved type name; `NIR2014` `impl` target is
+not a struct of this file; `NIR2016` field given twice (also a repeated field declaration); `NIR2017` missing field;
+`NIR2018` `self` outside a method; `NIR3013` `&mut self` method on a temporary; `NIR3014` borrow outside an argument;
+`NIR3015` only a whole variable can be borrowed; `NIR3016` struct in an interpolation hole; `NIR3017` borrow of a non-struct.
+Reused: `NIR2003`, `NIR2004`, `NIR2006`, `NIR2011`, `NIR3001`, `NIR3002`.
+
+**Acceptance programs** (`Programs/slice7/`): the example above; nested structs and nested field writes; copies on
+assignment, on passing and on returning; a `&mut` borrow changing the caller's value and a by-value parameter not; `&`
+borrows read-only; methods calling methods; a borrow passed on (`&mut p` inside a function that took `&mut Point`); a method
+chain; a struct in a loop; struct fields of every type; several `impl` blocks; and errors for every code above plus
+the struct-literal-in-condition parse and its parenthesised fix.
+
+### Tasks
+
+- [x] **T7.0 Syntax**
+  - Tokens, grammar (with the struct-literal flag and predicate), AST, `AstBuilder`, `AstFormatter`; the existing
+    `Parameter` / `AssignmentStatement` / `FunctionDeclaration` changes ripple into the binder only far enough to compile
+    (struct features themselves are bound in later tasks).
+  - Tests: lexer (`&` vs `&&`, new keywords, `self` ends a statement); parser trees for struct declarations (comma and
+    newline separators, empty struct, trailing separator), `impl` blocks, receivers, borrow parameters, struct literals
+    (one line, many lines, nested, in `return` and `let`), field access chains, `self`, `&x` / `&mut x`, assignment
+    targets (`p.x`, `a.b.c`, `self.x`); the condition rule (`while n != limit { }` parses as a loop,
+    `if (P { x = 1 }) == q { }`-style parenthesised literals parse, a bare literal in a head is a syntax error); spans;
+    broken input reports one `NIR1001` without throwing.
+  - **Done when:** these pass and every older test still passes.
+
+- [x] **T7.1 Structs end to end**
+  - Split `ProgramBinder` out of `Binder.cs` into a partial class spread over several files before adding struct code.
+  - Struct declarations, fields, literals, field read and write, nested structs, copies, by-value parameters and results,
+    mutability by path, `NIR2012` to `NIR2017`; Emit of structs, fields, literals and places.
+  - Tests with positions for every rule and code; end-to-end programs.
+  - **Done when:** these pass.
+
+- [x] **T7.2 Methods**
+  - `impl`, instance methods with `&self` / `&mut self`, associated functions, `Self`, `self`, method calls on places and
+    temporaries, mutability checks, `NIR2014`, `NIR2018`, `NIR3013`; Emit of instance and static methods on the struct.
+  - Tests and end-to-end programs.
+  - **Done when:** these pass.
+
+- [x] **T7.3 Borrows**
+  - Borrow parameter types, `&x` / `&mut x` arguments, implicit copy of a borrow variable, passing a borrow on,
+    `NIR3014`, `NIR3015`, `NIR3017`; Emit with CLR `ref` parameters.
+  - Tests and end-to-end programs.
+  - **Done when:** these pass.
+
+- [x] **T7.4 Program tests, samples and docs**
+  - `Programs/slice7/` golden programs and `Slice7ProgramTests`; samples `structs.nir` and error samples; update
+    `architecture.md`, `CLAUDE.md`, tick tasks.
+  - **Done when:** all acceptance items pass, `dotnet build` has 0 warnings, `dotnet test` is green.
+
+---
+
+## Later slices (outline; detailed when each starts)
 
 **Slice 8: tuples, unions, `match`.** Tuples as `ValueTuple`; `union { A, B }`; exhaustive `match`. Design section 11.
 
@@ -837,3 +975,4 @@ set of missing BCL-interop features.
 - Removing ANTLR in favour of a hand-written parser (must only touch `Parsing/`).
 - Optional `A | B` union syntax.
 - `frozen` types, structural types, Rust-style borrow checking.
+- Syntax error hint for a struct literal in an `if` / `while` head (today: `no viable alternative at input 'P'`; suggest parentheses, as Rust does).

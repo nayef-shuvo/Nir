@@ -11,6 +11,20 @@ public sealed record CallExpression(QualifiedName Callee, ImmutableArray<Express
 public sealed record MemberCallExpression(Expression Receiver, Identifier Method, ImmutableArray<Expression> Arguments, TextSpan Span)
     : Expression(Span);
 
+/// <summary><c>Name { field = value, ... }</c>.</summary>
+public sealed record StructLiteralExpression(Identifier TypeName, ImmutableArray<FieldInitializer> Fields, TextSpan Span) : Expression(Span);
+
+public sealed record FieldInitializer(Identifier Name, Expression Value, TextSpan Span) : SyntaxNode(Span);
+
+/// <summary><c>receiver.field</c>.</summary>
+public sealed record FieldAccessExpression(Expression Receiver, Identifier Field, TextSpan Span) : Expression(Span);
+
+/// <summary>The receiver inside a method.</summary>
+public sealed record SelfExpression(TextSpan Span) : Expression(Span);
+
+/// <summary><c>&amp;operand</c> or <c>&amp;mut operand</c>: a reference to a variable.</summary>
+public sealed record ReferenceExpression(Expression Operand, bool IsMutable, TextSpan Span) : Expression(Span);
+
 /// <summary>A use of a variable by name.</summary>
 public sealed record NameExpression(Identifier Name, TextSpan Span) : Expression(Span);
 

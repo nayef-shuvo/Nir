@@ -465,5 +465,27 @@ public class LexerTests
         Assert.Equal("IDENTIFIER AS IDENTIFIER SEMI EOF", TokenFormatter.Names("x as int"));
         Assert.Equal("IDENTIFIER IDENTIFIER SEMI EOF", TokenFormatter.Names("assert ascii"));
     }
+
+    [Fact]
+    public void Ampersand_is_its_own_token_and_double_ampersand_stays_one()
+    {
+        Assert.Equal("AMP IDENTIFIER SEMI EOF", TokenFormatter.Names("&x"));
+        Assert.Equal("AMP MUT IDENTIFIER SEMI EOF", TokenFormatter.Names("&mut x"));
+        Assert.Equal("IDENTIFIER AMPAMP IDENTIFIER SEMI EOF", TokenFormatter.Names("a && b"));
+        Assert.Equal("AMP AMP IDENTIFIER SEMI EOF", TokenFormatter.Names("& &x"));
+    }
+
+    [Fact]
+    public void Struct_keywords()
+    {
+        Assert.Equal("TYPE STRUCT IMPL SELF SEMI EOF", TokenFormatter.Names("type struct impl self"));
+        Assert.Equal("IDENTIFIER IDENTIFIER IDENTIFIER SEMI EOF", TokenFormatter.Names("Self typed selfish"));
+    }
+
+    [Fact]
+    public void Self_can_end_a_statement()
+    {
+        Assert.Equal("RETURN SELF SEMI IDENTIFIER SEMI EOF", TokenFormatter.Names("return self\nx"));
+    }
 }
 

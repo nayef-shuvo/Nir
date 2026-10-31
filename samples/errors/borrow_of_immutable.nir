@@ -1,0 +1,9 @@
+// Expect: NIR3002 "cannot borrow 'p' with '&mut' because 'p' is not mutable" on line 8.
+type Point = struct { x: int }
+fn bump(p: &mut Point) {
+    p.x = p.x + 1
+}
+fn main() {
+    let p = Point { x = 1 }
+    bump(&mut p)
+}

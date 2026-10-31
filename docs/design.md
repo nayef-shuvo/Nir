@@ -150,7 +150,7 @@ fn main() {
   `int`. `double` to `int` cuts off the fraction toward zero and throws (crashes) when the value does not fit or is `NaN`,
   like the other checked arithmetic. `as` binds tighter than `*` and looser than unary `-`, so `-x as double` is `(-x) as double`.
 
-## 2. Type declarations [proposed]
+## 2. Type declarations [struct locked, tuple proposed]
 
 One form: `type Name = <shape>`. Struct and tuple use the same form, so `type` vs `const` is gone.
 
@@ -162,6 +162,29 @@ type Point = struct {
 
 type Pair = (x: int, y: int)        // compiles to ValueTuple
 ```
+
+A struct's fields are separated by a comma or a newline (the last separator is optional), so these are the same:
+
+```
+type Point = struct { x: int, y: int }
+
+type Point = struct {
+    x: int
+    y: int
+}
+```
+
+A **struct literal** names the type and gives every field exactly once, in any order, with `=` (the same style as named
+arguments), separated by commas or newlines: `Point { x = 1, y = 2 }`. There are no default values. Inside its own `impl`
+a struct is also called `Self`. A struct cannot contain itself by value (`type A = struct { a: A }` is an error), and its
+fields can be `int`, `double`, `bool`, `string` or another struct.
+
+A struct literal cannot appear directly in the head of an `if`, `while` or `for`, because `limit {` would look like the
+start of a struct literal. Put it in parentheses: `if p == (Point { x = 1, y = 2 }) { }` (and `==` on structs is not
+available yet; the rule is for later).
+
+Struct values: `==` on structs, `print(p)`, and putting a struct in `{ }` of an interpolated string are errors for now;
+compare or print the fields. The `p with { x = 5 }` copy-and-change form comes later.
 
 Optional values use a `?` prefix:
 
@@ -268,20 +291,34 @@ p.move_right()                  // no allocation: p stays on the stack
 
 No inheritance. Composition only.
 
-## 6. Borrowed parameters vs stored references [locked, syntax open]
+## 6. Borrowed parameters vs stored references [borrows locked, stored references open]
 
 `&self`, `&T` and `&mut T` as parameters are borrows. A borrow lasts for the call and compiles to a CLR
-`ref`, so no allocation. It cannot be stored.
+`ref`, so no allocation. It cannot be stored. The caller writes the borrow at the call, so a change is visible where it
+happens:
 
 ```
-fn bump(p: &mut Point) { p.x = p.x + 1 }      // fine
+fn bump(p: &mut Point) { p.x = p.x + 1 }
+fn show(p: &Point)     { print(p.x) }
 
-Point impl {
-    fn remember(&mut self, other: &Point) {
-        self.last = other                      // error: cannot store a borrow
-    }
+fn main() {
+    let mut p = Point { x = 1, y = 2 }
+    bump(&mut p)                  // "this call may change p"
+    show(&p)                      // a read-only borrow
+    show(&mut p)                  // fine: a mutable borrow can be used read-only
 }
 ```
+
+- `&x` and `&mut x` mean "a reference to the variable x". For now they can only be written directly as an argument for a
+  borrow parameter (anywhere else is an error); storing a reference arrives with heap references. Passed to a borrow
+  parameter they cost nothing.
+- Only a whole variable can be borrowed, not a field or an element. `&mut x` needs `x` to be mutable: `let mut`, `self` in
+  a `&mut self` method, or a `&mut` borrow parameter. A by-value parameter is immutable, so `&mut` of it is an error.
+- For now only structs can be borrowed. `&mut int` would need a way to read and write through the reference (open
+  question 1), so a borrow parameter of any other type is an error.
+- Inside the function the borrow variable can be used for field reads, field writes (if it is `&mut`), method calls, and
+  passed on as `&p` or `&mut p`. Using it bare (`let q = p`) copies the struct. It cannot be assigned.
+- A by-value parameter (`p: Point`) is a copy; the function cannot change the caller's value.
 
 A stored reference must be a heap reference created by `&T { ... }`.
 How a function declares "I take a heap reference and will keep it" is open. See Open questions.

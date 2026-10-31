@@ -5,7 +5,7 @@ namespace Nir.Compiler.Semantics;
 /// <summary>Base of the bound tree: the typed, name-resolved form of the syntax tree that Emit reads.</summary>
 public abstract record BoundNode;
 
-public sealed record BoundProgram(ImmutableArray<BoundFunction> Functions, UserFunctionSymbol EntryPoint) : BoundNode;
+public sealed record BoundProgram(ImmutableArray<StructTypeSymbol> Structs, ImmutableArray<BoundFunction> Functions, UserFunctionSymbol EntryPoint) : BoundNode;
 
 public sealed record BoundFunction(UserFunctionSymbol Symbol, BoundBlock Body) : BoundNode;
 
@@ -31,6 +31,9 @@ public sealed record BoundBreakStatement : BoundStatement;
 
 public sealed record BoundContinueStatement : BoundStatement;
 
+/// <summary><c>target = value</c> where the target is a field: <c>p.x</c>, <c>line.to.x</c>.</summary>
+public sealed record BoundFieldAssignment(BoundFieldAccess Target, BoundExpression Value) : BoundStatement;
+
 public sealed record BoundVariableDeclaration(VariableSymbol Variable, BoundExpression Initializer) : BoundStatement;
 
 public sealed record BoundAssignment(VariableSymbol Variable, BoundExpression Value) : BoundStatement;
@@ -43,6 +46,24 @@ public sealed record BoundCallExpression(FunctionSymbol Target, ImmutableArray<B
 /// <summary>A method called on a value: <c>receiver.Method(arguments)</c>. The receiver is evaluated first.</summary>
 public sealed record BoundMemberCallExpression(BoundExpression Receiver, ClrMethodSymbol Target, ImmutableArray<BoundExpression> Arguments)
     : BoundExpression(Target.ReturnType);
+
+/// <summary>A struct value built from its field initializers, which run in source order.</summary>
+public sealed record BoundStructLiteral(StructTypeSymbol Struct, ImmutableArray<BoundFieldInitializer> Initializers) : BoundExpression(Struct);
+
+public sealed record BoundFieldInitializer(FieldSymbol Field, BoundExpression Value);
+
+/// <summary>Reads a field of a struct value, or names a field as an assignment target.</summary>
+public sealed record BoundFieldAccess(BoundExpression Receiver, FieldSymbol Field) : BoundExpression(Field.Type);
+
+/// <summary><c>receiver.method(arguments)</c> on a struct: the receiver is passed by address.</summary>
+public sealed record BoundMethodCall(BoundExpression Receiver, UserFunctionSymbol Method, ImmutableArray<BoundExpression> Arguments)
+    : BoundExpression(Method.ReturnType);
+
+/// <summary>Reads the struct a borrow points at (a copy of it).</summary>
+public sealed record BoundDereference(BoundExpression Borrow, StructTypeSymbol Element) : BoundExpression(Element);
+
+/// <summary><c>&amp;x</c> or <c>&amp;mut x</c> passed as an argument: the address of the variable <paramref name="Place"/>.</summary>
+public sealed record BoundBorrowExpression(BoundExpression Place, BorrowTypeSymbol Borrow) : BoundExpression(Borrow);
 
 public sealed record BoundStringLiteral(string Value) : BoundExpression(TypeSymbol.StringType);
 

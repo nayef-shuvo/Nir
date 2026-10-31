@@ -1,0 +1,9 @@
+// Expect: NIR3001 "cannot convert 'Point' to '&mut Point'; write '&mut' before the variable to borrow it" on line 8.
+type Point = struct { x: int }
+fn bump(p: &mut Point) {
+    p.x = p.x + 1
+}
+fn main() {
+    let mut p = Point { x = 1 }
+    bump(p)
+}

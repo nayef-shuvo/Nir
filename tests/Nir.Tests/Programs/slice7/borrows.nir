@@ -1,0 +1,34 @@
+type Counter = struct { n: int }
+
+fn by_value(c: Counter) {
+    let mut local = c
+    local.n = local.n + 1000
+    print(local.n)
+}
+
+fn bump(c: &mut Counter) {
+    c.n = c.n + 1
+}
+
+fn peek(c: &Counter) -> int {
+    return c.n
+}
+
+fn bump_twice(c: &mut Counter) {
+    bump(&mut c)
+    bump(&mut c)
+    print(peek(&c))
+}
+
+fn main() {
+    let mut c = Counter { n = 0 }
+    bump(&mut c)
+    print(c.n)
+    by_value(c)
+    print(c.n)
+    bump_twice(&mut c)
+    print(c.n)
+    print(peek(&mut c))
+    let frozen = Counter { n = 50 }
+    print(peek(&frozen))
+}

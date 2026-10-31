@@ -1,0 +1,252 @@
+using System.Collections.Immutable;
+using System.Diagnostics;
+using Nir.Compiler.Diagnostics;
+using Nir.Compiler.Syntax;
+
+namespace Nir.Compiler.Semantics;
+
+/// <summary>Structs: declarations and fields, struct literals, field reads and field writes.</summary>
+internal sealed partial class ProgramBinder
+{
+    private readonly Dictionary<string, StructTypeSymbol> _structs = [];
+    private readonly List<StructTypeSymbol> _structOrder = [];
+
+    // Pass 1a: the names. Fields come later because a field may use a struct that is declared further down.
+    private void DeclareStructs(ImmutableArray<StructDeclaration> declarations)
+    {
+        foreach (var declaration in declarations)
+        {
+            var name = declaration.Name.Text;
+            string? problem = null;
+            if (LookupPrimitive(name) is not null)
+            {
+                problem = $"'{name}' is a built-in type and cannot be redefined";
+            }
+            else if (name == "Program")
+            {
+                problem = "'Program' is reserved for the functions of the compiled program";
+            }
+            else if (_structs.ContainsKey(name))
+            {
+                problem = $"type '{name}' is already defined";
+            }
+            else if (_imports.ContainsKey(name))
+            {
+                problem = $"'{name}' is already imported";
+            }
+
+            if (problem is not null)
+            {
+                Error(DiagnosticCodes.DuplicateType, problem, declaration.Name.Span);
+                continue;
+            }
+
+            var symbol = new StructTypeSymbol(declaration);
+            _structs[name] = symbol;
+            _structOrder.Add(symbol);
+        }
+    }
+
+    // Pass 1b: the fields, then a check that no struct contains itself.
+    private void ResolveStructFields()
+    {
+        foreach (var symbol in _structOrder)
+        {
+            var fields = new List<FieldSymbol>();
+            var seen = new HashSet<string>();
+            foreach (var declaration in symbol.Declaration.Fields)
+            {
+                if (!seen.Add(declaration.Name.Text))
+                {
+                    Error(DiagnosticCodes.DuplicateField, $"field '{declaration.Name.Text}' is already declared", declaration.Name.Span);
+                    continue;
+                }
+
+                var type = LookupType(declaration.Type.Text);
+                if (type is null)
+                {
+                    Error(DiagnosticCodes.UnknownType, $"unknown type '{declaration.Type.Text}'", declaration.Type.Span);
+                    type = TypeSymbol.ErrorType;
+                }
+
+                fields.Add(new FieldSymbol(declaration.Name.Text, type, symbol, declaration));
+            }
+
+            symbol.Fields = [.. fields];
+        }
+
+        var reported = new HashSet<StructTypeSymbol>();
+        foreach (var symbol in _structOrder.Where(s => !reported.Contains(s)))
+        {
+            if (FindCycle(symbol, symbol, [symbol]) is not { } cycle)
+            {
+                continue;
+            }
+
+            // One cycle gets one diagnostic, at the field of its first struct that starts it.
+            var first = cycle[0];
+            Error(DiagnosticCodes.RecursiveStruct, $"struct '{symbol.Name}' contains itself, so it would have no size", first.Declaration!.Name.Span);
+            reported.Add(symbol);
+            foreach (var field in cycle)
+            {
+                if (field.Type is StructTypeSymbol member)
+                {
+                    reported.Add(member);
+                }
+            }
+        }
+    }
+
+    // The fields, in order, that lead from `current` back to `start` by value; null if they do not.
+    private static List<FieldSymbol>? FindCycle(StructTypeSymbol start, StructTypeSymbol current, HashSet<StructTypeSymbol> visited)
+    {
+        foreach (var field in current.Fields)
+        {
+            if (field.Type is not StructTypeSymbol next)
+            {
+                continue;
+            }
+
+            if (next == start)
+            {
+                return [field];
+            }
+
+            if (visited.Add(next) && FindCycle(start, next, visited) is { } rest)
+            {
+                rest.Insert(0, field);
+                return rest;
+            }
+        }
+
+        return null;
+    }
+
+    // A name used as a struct (in a literal): it must be a struct declared in this file.
+    private StructTypeSymbol? ResolveStructName(Identifier name)
+    {
+        if (StructNamed(name) is { } symbol)
+        {
+            return symbol;
+        }
+
+        if (LookupPrimitive(name.Text) is not null)
+        {
+            Error(DiagnosticCodes.NotAStruct, $"'{name.Text}' is not a struct", name.Span);
+        }
+        else
+        {
+            Error(DiagnosticCodes.UnknownType, $"unknown type '{name.Text}'", name.Span);
+        }
+
+        return null;
+    }
+
+    // `Point { x = 1, y = 2 }`: every field exactly once, in any order. The values run in the order written.
+    private BoundExpression BindStructLiteral(StructLiteralExpression literal)
+    {
+        var structType = ResolveStructName(literal.TypeName);
+
+        // Bind every value even when the type is bad, so mistakes inside them are reported too.
+        var values = literal.Fields.Select(field => (Field: field, Value: BindExpression(field.Value))).ToList();
+        if (structType is null)
+        {
+            return new BoundErrorExpression();
+        }
+
+        var failed = false;
+        var given = new HashSet<string>();
+        var initializers = ImmutableArray.CreateBuilder<BoundFieldInitializer>();
+        foreach (var (initializer, value) in values)
+        {
+            var field = structType.FindField(initializer.Name.Text);
+            if (field is null)
+            {
+                Error(DiagnosticCodes.NoSuchMember, $"'{initializer.Name.Text}' is not a member of '{structType.Name}'", initializer.Name.Span);
+                failed = true;
+            }
+            else if (!given.Add(field.Name))
+            {
+                Error(DiagnosticCodes.DuplicateField, $"field '{field.Name}' is given twice", initializer.Name.Span);
+                failed = true;
+            }
+            else if (value.Type == TypeSymbol.ErrorType)
+            {
+                failed = true;
+            }
+            else if (field.Type != TypeSymbol.ErrorType && value.Type != field.Type)
+            {
+                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{field.Type}'", initializer.Value.Span);
+                failed = true;
+            }
+            else
+            {
+                initializers.Add(new BoundFieldInitializer(field, value));
+            }
+        }
+
+        var missing = structType.Fields.Where(field => !given.Contains(field.Name)).Select(field => $"'{field.Name}'").ToList();
+        if (missing.Count > 0)
+        {
+            var noun = missing.Count == 1 ? "field" : "fields";
+            Error(DiagnosticCodes.MissingField, $"missing {noun} {string.Join(", ", missing)} in '{structType.Name}'", literal.TypeName.Span);
+            failed = true;
+        }
+
+        return failed ? new BoundErrorExpression() : new BoundStructLiteral(structType, initializers.ToImmutable());
+    }
+
+    // `receiver.field`: the receiver must be a struct value.
+    private BoundExpression BindFieldAccess(FieldAccessExpression access)
+    {
+        var receiver = BindPlace(access.Receiver);
+        if (receiver.Type == TypeSymbol.ErrorType)
+        {
+            return receiver;
+        }
+
+        // A borrow of a struct is read through, so `self.x` works without writing a dereference.
+        var owner = StructOf(receiver.Type);
+        var field = owner?.FindField(access.Field.Text);
+        if (field is null)
+        {
+            Error(DiagnosticCodes.NoSuchMember, $"'{access.Field.Text}' is not a member of '{owner?.Name ?? receiver.Type.Name}'", access.Field.Span);
+            return new BoundErrorExpression();
+        }
+
+        return new BoundFieldAccess(receiver, field);
+    }
+
+    // `p.x = value`, `line.to.x = value`: the path must start at a variable and that variable must be mutable.
+    private BoundStatement BindFieldAssignment(AssignmentStatement assignment, BoundExpression value)
+    {
+        var target = BindExpression(assignment.Target);
+        if (target is not BoundFieldAccess access)
+        {
+            return new BoundExpressionStatement(value); // the target already had an error
+        }
+
+        var text = PathText(assignment.Target);
+        var root = BoundPlaces.Root(access);
+        if (!BoundPlaces.IsMutable(root))
+        {
+            Error(DiagnosticCodes.NotMutable, NotMutableMessage($"assign to '{text}'", root), assignment.Target.Span);
+        }
+
+        if (value.Type != TypeSymbol.ErrorType && access.Type != TypeSymbol.ErrorType && value.Type != access.Type)
+        {
+            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{access.Type}'", assignment.Value.Span);
+        }
+
+        return new BoundFieldAssignment(access, value);
+    }
+
+    // `a.b.c` as written, for messages.
+    private static string PathText(Expression path) => path switch
+    {
+        NameExpression name => name.Name.Text,
+        SelfExpression => "self",
+        FieldAccessExpression access => PathText(access.Receiver) + "." + access.Field.Text,
+        _ => throw new UnreachableException(),
+    };
+}

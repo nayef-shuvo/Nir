@@ -1,0 +1,23 @@
+type Box = struct { n: int }
+
+fn grow(b: Box) -> Box {
+    let mut c = b
+    c.n = c.n + 100
+    return c
+}
+
+fn make() -> Box {
+    return Box { n = 7 }
+}
+
+fn main() {
+    let mut a = Box { n = 1 }
+    let b = a
+    a.n = 2
+    print(b.n)
+    print(a.n)
+    let c = grow(a)
+    print(a.n)
+    print(c.n)
+    print(make().n)
+}

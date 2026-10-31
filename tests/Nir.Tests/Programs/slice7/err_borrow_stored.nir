@@ -1,0 +1,5 @@
+type P = struct { x: int }
+fn main() {
+    let mut p = P { x = 1 }
+    let r = &mut p
+}

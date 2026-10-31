@@ -1,0 +1,46 @@
+type Account = struct {
+    balance: int
+    owner: string
+}
+
+Account impl {
+    fn open(owner: string) -> Self {
+        return Self { balance = 0, owner = owner }
+    }
+
+    fn deposit(&mut self, amount: int) {
+        self.balance = self.balance + amount
+    }
+
+    fn describe(&self) -> string {
+        return $"{self.owner}: {self.balance}"
+    }
+}
+
+Account impl {
+    fn transfer(&mut self, other: &mut Account, amount: int) {
+        self.balance = self.balance - amount
+        other.deposit(amount)
+    }
+
+    fn total(&self, other: &Account) -> int {
+        return self.balance + other.balance
+    }
+
+    fn deposit_twice(&mut self, amount: int) {
+        self.deposit(amount)
+        self.deposit(amount)
+    }
+}
+
+fn main() {
+    let mut a = Account::open("ada")
+    let mut b = Account::open("bob")
+    a.deposit(100)
+    a.deposit_twice(5)
+    a.transfer(&mut b, 30)
+    print(a.describe())
+    print(b.describe())
+    print(a.total(&b))
+    print(Account::open("temp").describe())
+}

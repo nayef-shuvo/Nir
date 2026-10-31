@@ -27,6 +27,14 @@ internal static class AstFormatter
     private static string Describe(SyntaxNode node) => node switch
     {
         CompilationUnit => "CompilationUnit",
+        StructDeclaration s => $"Struct {s.Name.Text}",
+        FieldDeclaration f => $"FieldDecl {f.Name.Text}: {f.Type.Text}",
+        ImplDeclaration i => $"Impl {i.TypeName.Text}",
+        StructLiteralExpression l => $"StructLiteral {l.TypeName.Text}",
+        FieldInitializer i => $"Init {i.Name.Text}",
+        FieldAccessExpression f => $"FieldAccess {f.Field.Text}",
+        SelfExpression => "self",
+        ReferenceExpression r => r.IsMutable ? "RefMut" : "Ref",
         UsingDirective u => "Using " + string.Join("::", u.Path.Select(p => p.Text)) + Group(u),
         MemberCallExpression m => $"MemberCall {m.Method.Text}",
         FunctionDeclaration f => $"FunctionDeclaration {f.Name.Text}{Signature(f)}",
@@ -49,7 +57,7 @@ internal static class AstFormatter
         DoubleLiteralExpression d => $"DoubleLiteral {d.Text}",
         BoolLiteralExpression b => $"BoolLiteral {(b.Value ? "true" : "false")}",
         VariableDeclaration d => $"VariableDeclaration let {(d.IsMutable ? "mut " : string.Empty)}{d.Name.Text}{(d.DeclaredType is { } t ? ": " + t.Text : string.Empty)}",
-        AssignmentStatement a => $"Assignment {a.Target.Text}",
+        AssignmentStatement a => $"Assignment {TargetText(a.Target)}",
         NameExpression n => $"Name {n.Name.Text}",
         BinaryExpression b => $"Binary {OperatorText.Of(b.Operator)}",
         UnaryExpression u => $"Unary {OperatorText.Of(u.Operator)}",
@@ -76,6 +84,15 @@ internal static class AstFormatter
     // A line of the printed tree that is not itself a syntax node.
     private sealed record Label(string Text, SyntaxNode Child) : SyntaxNode(default(Nir.Compiler.Diagnostics.TextSpan));
 
+    // `p`, `self`, `self.pos.x`: an assignment target written out.
+    private static string TargetText(Expression target) => target switch
+    {
+        NameExpression n => n.Name.Text,
+        SelfExpression => "self",
+        FieldAccessExpression f => TargetText(f.Receiver) + "." + f.Field.Text,
+        _ => throw new UnreachableException(),
+    };
+
     // `::{Math, Console}` for a group import; nothing for a plain one.
     private static string Group(UsingDirective directive) =>
         directive.Members.Length == 0 ? string.Empty : "::{" + string.Join(", ", directive.Members.Select(m => m.Text)) + "}";
@@ -83,9 +100,13 @@ internal static class AstFormatter
     // `(a: int, b: int) -> int`; nothing at all for a function without parameters and return type.
     private static string Signature(FunctionDeclaration function)
     {
-        var parameters = function.Parameters.Length == 0
-            ? string.Empty
-            : "(" + string.Join(", ", function.Parameters.Select(p => $"{p.Name.Text}: {p.Type.Text}")) + ")";
+        var items = function.Parameters.Select(p => $"{p.Name.Text}: {p.Type.Text}").ToList();
+        if (function.Receiver is { } receiver)
+        {
+            items.Insert(0, receiver.IsMutable ? "&mut self" : "&self");
+        }
+
+        var parameters = items.Count == 0 ? string.Empty : "(" + string.Join(", ", items) + ")";
         var returnType = function.ReturnType is { } type ? " -> " + type.Text : string.Empty;
 
         return parameters + returnType;
@@ -93,7 +114,15 @@ internal static class AstFormatter
 
     private static IEnumerable<SyntaxNode> Children(SyntaxNode node) => node switch
     {
-        CompilationUnit u => u.Usings.Cast<SyntaxNode>().Concat(u.Functions),
+        CompilationUnit u => u.Usings.Cast<SyntaxNode>().Concat(u.Structs).Concat(u.Impls).Concat(u.Functions),
+        StructDeclaration s => s.Fields,
+        FieldDeclaration => [],
+        ImplDeclaration i => i.Methods,
+        StructLiteralExpression l => l.Fields,
+        FieldInitializer i => [i.Value],
+        FieldAccessExpression f => [f.Receiver],
+        SelfExpression => [],
+        ReferenceExpression r => [r.Operand],
         UsingDirective => [],
         MemberCallExpression m => [m.Receiver, .. m.Arguments],
         FunctionDeclaration f => [f.Body],

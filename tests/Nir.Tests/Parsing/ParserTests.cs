@@ -738,7 +738,6 @@ public class ParserTests
     [InlineData("using a::{b")]
     [InlineData("using ::a")]
     [InlineData("fn main() { x. }")]
-    [InlineData("fn main() { x.F }")]
     [InlineData("fn main() { x.F( }")]
     [InlineData("fn main() { a::() }")]
     [InlineData("fn main() { a::b }")]
@@ -1224,6 +1223,378 @@ public class ParserTests
 
         Assert.NotNull(unit);
         Assert.Single(diagnostics);
+    }
+
+    // ---- structs, impl, receivers, borrows ----
+
+    [Fact]
+    public void Struct_with_comma_separated_fields()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              Struct Point
+                FieldDecl x: int
+                FieldDecl y: int
+            """,
+            Tree("type Point = struct { x: int, y: int }"));
+    }
+
+    [Theory]
+    [InlineData("type Point = struct {\n    x: int,\n    y: int,\n}")]
+    [InlineData("type Point = struct {\n    x: int\n    y: int\n}")]
+    [InlineData("type Point = struct {\n    x: int,\n    y: int\n}")]
+    [InlineData("type Point = struct { x: int; y: int }")]
+    public void Struct_fields_may_be_separated_by_commas_or_newlines(string source)
+    {
+        Assert.Equal(Tree("type Point = struct { x: int, y: int }"), Tree(source));
+    }
+
+    [Fact]
+    public void Empty_struct()
+    {
+        Assert.Equal("CompilationUnit\n  Struct Empty", Tree("type Empty = struct {}"));
+        Assert.Equal("CompilationUnit\n  Struct Empty", Tree("type Empty = struct {\n}"));
+    }
+
+    [Fact]
+    public void Impl_block_with_methods_and_receivers()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              Impl Point
+                FunctionDeclaration new(x: int, y: int) -> Self
+                  Block
+                    Return
+                      StructLiteral Self
+                        Init x
+                          Name x
+                        Init y
+                          Name y
+                FunctionDeclaration length(&self) -> int
+                  Block
+                    Return
+                      FieldAccess x
+                        self
+                FunctionDeclaration move(&mut self, dx: int)
+                  Block
+                    Assignment self.x
+                      Binary +
+                        FieldAccess x
+                          self
+                        Name dx
+            """,
+            Tree(
+                "Point impl {\n" +
+                "    fn new(x: int, y: int) -> Self {\n        return Self { x = x, y = y }\n    }\n" +
+                "    fn length(&self) -> int {\n        return self.x\n    }\n" +
+                "    fn move(&mut self, dx: int) {\n        self.x = self.x + dx\n    }\n" +
+                "}"));
+    }
+
+    [Fact]
+    public void Empty_impl_and_impl_on_one_line()
+    {
+        Assert.Equal("CompilationUnit\n  Impl P", Tree("P impl {}"));
+        Assert.Equal(
+            """
+            CompilationUnit
+              Impl P
+                FunctionDeclaration f
+                  Block
+            """,
+            Tree("P impl { fn f() {} }"));
+    }
+
+    [Fact]
+    public void Borrow_parameters()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              FunctionDeclaration bump(p: &mut Point, q: &Point, n: int)
+                Block
+            """,
+            Tree("fn bump(p: &mut Point, q: &Point, n: int) {}"));
+    }
+
+    [Fact]
+    public void Struct_literal_on_one_line_and_over_several_lines()
+    {
+        var expected =
+            """
+            StructLiteral Point
+              Init x
+                IntLiteral 1
+              Init y
+                IntLiteral 2
+            """;
+
+        Assert.Equal(expected, ExpressionTree("Point { x = 1, y = 2 }"));
+        Assert.Equal(expected, ExpressionTree("Point {\n        x = 1,\n        y = 2,\n    }"));
+        Assert.Equal("StructLiteral Point", ExpressionTree("Point {}"));
+    }
+
+    [Fact]
+    public void Struct_literal_fields_may_be_separated_by_newlines_outside_parentheses()
+    {
+        // Inside parentheses a newline is whitespace, so there a comma is needed between fields; as a statement it is not.
+        Assert.Equal(
+            """
+            VariableDeclaration let v
+              StructLiteral Point
+                Init x
+                  IntLiteral 1
+                Init y
+                  IntLiteral 2
+            """,
+            StatementTree("let v = Point {\n    x = 1\n    y = 2\n}"));
+    }
+
+    [Fact]
+    public void Newline_separated_fields_inside_parentheses_need_a_comma()
+    {
+        var (_, diagnostics) = Parse("fn main() { print(Point {\n    x = 1\n    y = 2\n}) }");
+
+        Assert.Equal(DiagnosticCodes.SyntaxError, Assert.Single(diagnostics).Code);
+    }
+
+    [Fact]
+    public void Struct_literals_nest_and_appear_in_let_and_return()
+    {
+        Assert.Equal(
+            """
+            VariableDeclaration let line
+              StructLiteral Line
+                Init from
+                  StructLiteral Point
+                    Init x
+                      IntLiteral 0
+                Init to
+                  Name p
+            Return
+              StructLiteral Point
+            """,
+            StatementTree("let line = Line { from = Point { x = 0 }, to = p }\nreturn Point {}"));
+    }
+
+    [Fact]
+    public void Field_access_chains_to_the_left()
+    {
+        Assert.Equal(
+            """
+            FieldAccess c
+              FieldAccess b
+                Name a
+            """,
+            ExpressionTree("a.b.c"));
+        Assert.Equal(
+            """
+            MemberCall F
+              FieldAccess b
+                Name a
+            """,
+            ExpressionTree("a.b.F()"));
+        Assert.Equal(
+            """
+            FieldAccess x
+              CallExpression f
+            """,
+            ExpressionTree("f().x"));
+    }
+
+    [Fact]
+    public void Field_access_binds_tighter_than_unary_minus_and_cast()
+    {
+        Assert.Equal(
+            """
+            Cast double
+              Unary -
+                FieldAccess x
+                  Name p
+            """,
+            ExpressionTree("-p.x as double"));
+    }
+
+    [Fact]
+    public void References_and_self()
+    {
+        Assert.Equal("Ref\n  Name x", ExpressionTree("&x"));
+        Assert.Equal("RefMut\n  Name x", ExpressionTree("&mut x"));
+        Assert.Equal("RefMut\n  self", ExpressionTree("&mut self"));
+        Assert.Equal("FieldAccess x\n  self", ExpressionTree("self.x"));
+        Assert.Equal(
+            """
+            CallExpression bump
+              RefMut
+                Name p
+              Ref
+                Name q
+            """,
+            ExpressionTree("bump(&mut p, &q)"));
+    }
+
+    [Fact]
+    public void Logical_and_still_lexes_as_one_token_next_to_a_reference()
+    {
+        Assert.Equal(
+            """
+            Binary &&
+              Name a
+              Name b
+            """,
+            ExpressionTree("a && b"));
+    }
+
+    [Fact]
+    public void Assignment_targets_may_be_field_paths()
+    {
+        Assert.Equal("Assignment p.x\n  IntLiteral 1", StatementTree("p.x = 1"));
+        Assert.Equal("Assignment a.b.c\n  IntLiteral 1", StatementTree("a.b.c = 1"));
+        Assert.Equal("Assignment self.pos.x\n  IntLiteral 2", StatementTree("self.pos.x = 2"));
+        Assert.Equal("Assignment x\n  IntLiteral 1", StatementTree("x = 1"));
+    }
+
+    [Fact]
+    public void Field_comparison_is_an_expression_not_an_assignment()
+    {
+        Assert.Equal(
+            """
+            ExpressionStatement
+              Binary ==
+                FieldAccess x
+                  Name p
+                IntLiteral 1
+            """,
+            StatementTree("p.x == 1"));
+    }
+
+    // ---- struct literals in the head of if / while / for ----
+
+    [Fact]
+    public void A_name_before_the_block_of_a_while_is_not_a_struct_literal()
+    {
+        Assert.Equal(
+            """
+            While
+              Binary !=
+                Name n
+                Name limit
+              Block
+                Assignment n
+                  Binary +
+                    Name n
+                    IntLiteral 1
+            """,
+            StatementTree("while n != limit { n = n + 1 }"));
+    }
+
+    [Theory]
+    [InlineData("if x == y { }")]
+    [InlineData("if flag { }")]
+    [InlineData("for i in 0..n { }")]
+    [InlineData("for i in a..=b { }")]
+    [InlineData("while n < limit { break }")]
+    public void Heads_ending_in_a_name_parse_as_blocks(string statement)
+    {
+        var (unit, diagnostics) = Parse($"fn main() {{\n{statement}\n}}");
+
+        Assert.Empty(diagnostics);
+        Assert.Single(unit.Functions[0].Body.Statements);
+    }
+
+    [Fact]
+    public void A_parenthesised_struct_literal_is_allowed_in_a_head()
+    {
+        Assert.Equal(
+            """
+            If
+              Binary ==
+                Parenthesized
+                  StructLiteral P
+                    Init x
+                      IntLiteral 1
+                Name q
+              Block
+            """,
+            StatementTree("if (P { x = 1 }) == q { }"));
+    }
+
+    [Fact]
+    public void A_struct_literal_is_allowed_in_call_arguments_and_holes_inside_a_head()
+    {
+        var (_, diagnostics) = Parse("fn main() {\n    if same(P { x = 1 }, q) { }\n    while $\"{P { x = 1 }}\" == s { }\n}");
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void A_bare_struct_literal_in_a_head_is_a_syntax_error()
+    {
+        var (_, diagnostics) = Parse("fn main() {\n    if P { x = 1 } == q { }\n}");
+
+        Assert.Equal(DiagnosticCodes.SyntaxError, Assert.Single(diagnostics).Code);
+    }
+
+    [Fact]
+    public void Struct_literals_are_allowed_again_inside_the_body_of_a_loop()
+    {
+        var (unit, diagnostics) = Parse("fn main() {\n    while a < b {\n        let p = P { x = 1 }\n    }\n    let q = P { x = 2 }\n}");
+
+        Assert.Empty(diagnostics);
+        Assert.Equal(2, unit.Functions[0].Body.Statements.Length);
+    }
+
+    [Fact]
+    public void Nested_heads_keep_the_rule()
+    {
+        var (_, diagnostics) = Parse("fn main() {\n    if a {\n        while n != limit { n = n + 1 }\n    }\n}");
+
+        Assert.Empty(diagnostics);
+    }
+
+    // ---- spans and errors ----
+
+    [Fact]
+    public void Struct_and_literal_spans()
+    {
+        const string text = "type P = struct { x: int }\nfn main() { let a = P { x = 1 } }";
+        var (unit, _) = Parse(text);
+
+        Assert.Equal(new TextSpan(0, 26), unit.Structs[0].Span);
+        Assert.Equal(new TextSpan(18, 6), unit.Structs[0].Fields[0].Span);
+        var declaration = (VariableDeclaration)unit.Functions[0].Body.Statements[0];
+        Assert.Equal(new TextSpan(47, 11), declaration.Initializer.Span);
+    }
+
+    [Theory]
+    [InlineData("type = struct { }")]
+    [InlineData("type P struct { }")]
+    [InlineData("type P = struct { x }")]
+    [InlineData("type P = struct { x: }")]
+    [InlineData("type P = struct { x: int y }")]
+    [InlineData("P impl")]
+    [InlineData("P impl { fn }")]
+    [InlineData("P impl { 5 }")]
+    [InlineData("fn f(self) { }")]
+    [InlineData("fn f(&) { }")]
+    [InlineData("fn f(&mut) { }")]
+    [InlineData("fn f(p: &) { }")]
+    [InlineData("fn f(p: &mut) { }")]
+    [InlineData("fn main() { let a = P { x = } }")]
+    [InlineData("fn main() { let a = P { = 1 } }")]
+    [InlineData("fn main() { let a = P { x = 1 y } }")]
+    [InlineData("fn main() { & }")]
+    [InlineData("fn main() { &mut }")]
+    [InlineData("fn main() { p. }")]
+    [InlineData("fn main() { p.x. = 1 }")]
+    public void Broken_struct_syntax_reports_one_NIR1001_and_still_returns_a_tree(string source)
+    {
+        var (unit, diagnostics) = Parse(source);
+
+        Assert.NotNull(unit);
+        Assert.Equal(DiagnosticCodes.SyntaxError, Assert.Single(diagnostics).Code);
     }
 }
 

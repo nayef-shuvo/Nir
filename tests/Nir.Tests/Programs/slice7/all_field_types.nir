@@ -1,0 +1,18 @@
+type Mix = struct {
+    i: int
+    d: double
+    b: bool
+    s: string
+}
+
+fn main() {
+    let mut m = Mix { i = 1, d = 2.5, b = true, s = "hi" }
+    m.i = m.i + 1
+    m.d = m.d * 2.0
+    m.b = !m.b
+    m.s = m.s + "!"
+    print(m.i)
+    print(m.d)
+    print(m.b)
+    print(m.s)
+}

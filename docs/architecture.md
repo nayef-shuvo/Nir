@@ -138,7 +138,7 @@ Codes are never reused or renumbered. Each code is a `public const string` in a 
 period, names in single quotes, say what is wrong, not what to do. Example: `'x' is not defined`,
 `cannot assign to 'x' because it is not mutable`.
 
-Codes defined so far (slices 1 to 4):
+Codes defined so far (slices 1 to 7; the message text in `DiagnosticCodes` call sites is authoritative):
 
 | Code | Meaning | Message template |
 |---|---|---|
@@ -169,6 +169,17 @@ Codes defined so far (slices 1 to 4):
 | NIR3010 | `break` or `continue` outside a loop | `'{keyword}' can only be used inside a loop` |
 | NIR3012 | value of type `()` inside `{ }` of an interpolated string | `cannot use a value of type '()' in an interpolated string` |
 | NIR3011 | .NET method returns a type Nir cannot use yet | `'{method}' returns '{type}', which Nir cannot use yet` |
+| NIR2012 | struct contains itself | `struct '{name}' contains itself, so it would have no size` |
+| NIR2013 | duplicate or reserved type name | `type '{name}' is already defined` / `'{name}' is a reserved type name` |
+| NIR2014 | `impl` target is not a struct of this file | `cannot add methods to '{name}': only structs declared in this file can have an 'impl'` |
+| NIR2016 | field given twice (in a declaration or a literal) | `field '{name}' is given more than once` |
+| NIR2017 | field missing from a struct literal | `missing field '{name}' in '{struct}'` |
+| NIR2018 | `self` outside a method | `'self' can only be used inside a method` |
+| NIR3013 | `&mut self` method called on a temporary | `cannot call '{method}' on a temporary because it changes its receiver` |
+| NIR3014 | borrow anywhere but a direct argument to a Nir function or method | `a borrow can only be passed directly as an argument to a function or method written in Nir` |
+| NIR3015 | borrow of something other than a whole variable | `only a whole variable can be borrowed, not a field or another expression` |
+| NIR3016 | struct inside `{ }` of an interpolated string | `cannot use a value of type '{struct}' in an interpolated string` |
+| NIR3017 | borrow of a non-struct | `cannot borrow a value of type '{type}': only structs can be borrowed for now` |
 
 ## 5. Parsing (`Nir.Compiler.Parsing`)
 
@@ -408,6 +419,25 @@ type, each bound to the matching `Console.WriteLine` overload. Built-ins are a t
 
 **Unit type.** The "nothing" type is `()` (design.md section 10). In code it is `TypeSymbol.UnitType`, CLR type `void`.
 
+### Slice 7 additions: structs, methods, borrows
+
+`ProgramBinder` is a partial class: `ProgramBinder.cs` (state, `Bind`, declarations, function bodies), `.Statements.cs`,
+`.Expressions.cs`, `.Calls.cs` (Nir and .NET calls, argument binding), `.Imports.cs`, `.Structs.cs` (declaring structs
+before bodies, field types, cycle detection, literals, field reads and writes), `.Methods.cs` (`impl` blocks, `self`,
+places, method and associated calls) and `.Borrows.cs` (borrow parameter types, `&x` / `&mut x`, argument fitting).
+
+- Types. `StructTypeSymbol` (fields in declaration order, methods; it has no CLR type, Emit creates one) and
+  `BorrowTypeSymbol(Element, IsMutable)`, used only for borrow parameters, receivers and borrow expressions.
+- A **place** is a variable, `self`, or a chain of fields. `BoundPlaces.IsMutable(root)` decides writes: the root is
+  `let mut`, `self` of a `&mut self` method, or a `&mut` borrow parameter. A by-value parameter and a `&` borrow are not
+  mutable, so mutability follows the access path and there is no per-field `mut`.
+- New bound nodes: `BoundStructLiteral`, `BoundFieldAccess`, `BoundFieldAssignment`, `BoundMethodCall`,
+  `BoundBorrowExpression(Place, Borrow)`, `BoundDereference` (a bare use of a borrow variable, an implicit copy).
+- Borrow argument rules (`ArgumentFits`): `&mut Point` accepts only `&mut p`; `&Point` accepts `&p` or `&mut p`; a plain
+  `Point` parameter rejects both and the message says how to fix it. `&x` is only legal as a direct argument to a Nir
+  function or method (`NIR3014` otherwise); the operand must be a whole variable (`NIR3015`) of struct type (`NIR3017`).
+  Assigning to a borrow variable itself is `NIR3002` only (no second mismatch error).
+
 ## 8. Emit (`Nir.Compiler.Emit`)
 
 ```csharp
@@ -471,6 +501,18 @@ address with `call`, a method declared on a reference type uses `callvirt` (a va
 
 Emit never reports user errors. If something it cannot emit reaches it, that is a compiler bug: throw
 `InvalidOperationException` with a clear message.
+
+### Slice 7 additions: structs, methods, borrows
+
+- A struct becomes a public sealed CLR value type (base `System.ValueType`, sequential layout, public instance fields)
+  created before function bodies; `EmitContext.Structs` maps symbol to `TypeBuilder` and `ClrOf` is the only place that
+  turns a Nir type into a CLR type (`BorrowTypeSymbol` becomes `T&`, a `ref` parameter, through `MakeByRefType`).
+- Instance methods are CLR instance methods of the struct (`this` is a managed pointer, parameters start at argument 1);
+  associated functions are static methods of the struct; free functions stay static methods of `Program`.
+- Places are emitted as addresses: `ldloca` for a local, `ldarga` for a by-value parameter, `ldarg` for a borrow (it already
+  is an address), `ldflda` for each field step. Read = address + `ldfld`; write = address, value, `stfld`; borrow argument =
+  the address; `BoundDereference` = `ldobj`; a struct literal is a temporary local (`initobj`, then `stfld` per field in
+  source order, then `ldloc`); a call result used as a receiver goes through a temporary.
 
 ## 9. Emit findings
 

@@ -213,6 +213,7 @@ public abstract class NirLexerBase : Antlr4.Runtime.Lexer
         NirLexer.RETURN or
         NirLexer.BREAK or
         NirLexer.CONTINUE or
+        NirLexer.SELF or
         NirLexer.STRING_END or
         NirLexer.INTERP_STRING_END or
         NirLexer.RPAREN or

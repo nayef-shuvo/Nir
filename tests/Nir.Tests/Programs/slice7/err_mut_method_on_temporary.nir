@@ -1,0 +1,12 @@
+type P = struct { x: int }
+P impl {
+    fn bump(&mut self) {
+        self.x = self.x + 1
+    }
+    fn make() -> Self {
+        return Self { x = 1 }
+    }
+}
+fn main() {
+    P::make().bump()
+}

@@ -28,4 +28,5 @@ public sealed record BreakStatement(TextSpan Span) : Statement(Span);
 
 public sealed record ContinueStatement(TextSpan Span) : Statement(Span);
 
-public sealed record AssignmentStatement(Identifier Target, Expression Value, TextSpan Span) : Statement(Span);
+/// <summary><paramref name="Target"/> is a name, <c>self</c>, or a chain of field accesses on one of them.</summary>
+public sealed record AssignmentStatement(Expression Target, Expression Value, TextSpan Span) : Statement(Span);

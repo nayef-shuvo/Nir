@@ -27,6 +27,24 @@ public static class DiagnosticCodes
     /// <summary>A call with the wrong number of arguments.</summary>
     public const string WrongArgumentCount = "NIR2004";
 
+    /// <summary>A struct that contains itself by value, directly or through other structs.</summary>
+    public const string RecursiveStruct = "NIR2012";
+
+    /// <summary>A type name that is already taken, or reserved.</summary>
+    public const string DuplicateType = "NIR2013";
+
+    /// <summary>A name that is used as a struct (in an <c>impl</c> or a literal) but is not a struct of this file.</summary>
+    public const string NotAStruct = "NIR2014";
+
+    /// <summary>A struct field declared twice, or given twice in a literal.</summary>
+    public const string DuplicateField = "NIR2016";
+
+    /// <summary>A struct literal that leaves out fields.</summary>
+    public const string MissingField = "NIR2017";
+
+    /// <summary><c>self</c> or <c>Self</c> used where there is no method or impl.</summary>
+    public const string SelfOutsideMethod = "NIR2018";
+
     /// <summary>A name declared twice in the same block.</summary>
     public const string AlreadyDeclared = "NIR2005";
 
@@ -53,6 +71,21 @@ public static class DiagnosticCodes
 
     /// <summary>Assignment to a variable declared without <c>mut</c>.</summary>
     public const string NotMutable = "NIR3002";
+
+    /// <summary>A method that needs <c>&amp;mut self</c> called on a temporary value, where the change would be lost.</summary>
+    public const string MutableCallOnTemporary = "NIR3013";
+
+    /// <summary><c>&amp;x</c> or <c>&amp;mut x</c> anywhere but as an argument to a function written in Nir.</summary>
+    public const string BorrowOutsideArgument = "NIR3014";
+
+    /// <summary>A borrow of a field or another expression instead of a whole variable.</summary>
+    public const string BorrowOfNonVariable = "NIR3015";
+
+    /// <summary>A borrow of something that is not a struct.</summary>
+    public const string BorrowOfNonStruct = "NIR3017";
+
+    /// <summary>A struct used inside <c>{ }</c> of an interpolated string.</summary>
+    public const string StructInInterpolation = "NIR3016";
 
     /// <summary>An operator used with operand types it does not support.</summary>
     public const string InvalidOperator = "NIR3003";

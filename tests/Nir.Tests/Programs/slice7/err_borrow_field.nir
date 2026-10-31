@@ -1,0 +1,7 @@
+type P = struct { x: int }
+fn show(p: &P) {
+}
+fn main() {
+    let p = P { x = 1 }
+    show(&p.x)
+}

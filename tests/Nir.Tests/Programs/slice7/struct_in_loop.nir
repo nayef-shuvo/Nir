@@ -1,0 +1,24 @@
+type Acc = struct { sum: int, count: int }
+
+Acc impl {
+    fn add(&mut self, n: int) {
+        self.sum = self.sum + n
+        self.count = self.count + 1
+    }
+}
+
+fn main() {
+    let mut acc = Acc { sum = 0, count = 0 }
+    for i in 1..=5 {
+        acc.add(i * i)
+    }
+    print(acc.sum)
+    print(acc.count)
+    let mut n = 0
+    while n < 3 {
+        let mut local = Acc { sum = n, count = 0 }
+        local.add(10)
+        print(local.sum)
+        n = n + 1
+    }
+}

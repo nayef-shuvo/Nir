@@ -1,0 +1,58 @@
+// Structs are values: copied when assigned or passed, changed in place through `&mut`.
+type Point = struct {
+    x: int,
+    y: int,
+}
+
+Point impl {
+    fn new(x: int, y: int) -> Self {
+        return Self { x = x, y = y }
+    }
+
+    fn length_squared(&self) -> int {
+        return self.x * self.x + self.y * self.y
+    }
+
+    fn move_right(&mut self) {
+        self.x = self.x + 1
+    }
+}
+
+type Segment = struct {
+    from: Point
+    to: Point
+}
+
+fn bump(p: &mut Point) {
+    p.y = p.y + 1
+}
+
+fn show(p: &Point) {
+    print($"({p.x}, {p.y})")
+}
+
+fn moved_copy(p: Point) -> Point {
+    let mut q = p
+    q.x = q.x + 100
+    return q
+}
+
+fn main() {
+    let mut p = Point::new(3, 4)
+    p.move_right()
+    bump(&mut p)
+    show(&p)
+    print(p.length_squared())
+
+    let q = p
+    p.x = 10
+    print(q.x)
+
+    let far = moved_copy(p)
+    show(&far)
+    show(&p)
+
+    let mut line = Segment { from = p, to = Point::new(0, 0) }
+    line.to.x = 7
+    print(line.to.x)
+}

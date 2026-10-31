@@ -26,18 +26,29 @@ public static class Emitter
         // Temporary naming: one class holding every function. Changes when modules arrive (slice 11).
         var type = module.DefineType("Program", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
 
-        var methods = program.Functions.ToDictionary(
-            function => function.Symbol,
-            function => type.DefineMethod(
-                function.Symbol.Name,
-                MethodAttributes.Public | MethodAttributes.Static,
-                function.Symbol.ReturnType.ClrType,
-                [.. function.Symbol.ParameterTypes.Select(t => t.ClrType)]));
+        var context = new EmitContext();
+        DefineStructs(program, module, context);
+
+        // Free functions are static methods of Program. A struct's methods live on the struct: an instance method (the receiver
+        // is the CLR `this`, a managed pointer to the struct) when it has `&self` / `&mut self`, otherwise a static method.
+        foreach (var function in program.Functions)
+        {
+            var symbol = function.Symbol;
+            var host = symbol.Owner is { } owner ? context.Structs[owner] : type;
+            var isInstance = symbol.Receiver != ReceiverKind.None;
+
+            context.Methods[symbol] = host.DefineMethod(
+                symbol.Name,
+                MethodAttributes.Public | (isInstance ? MethodAttributes.HideBySig : MethodAttributes.Static),
+                isInstance ? CallingConventions.HasThis : CallingConventions.Standard,
+                context.ClrOf(symbol.ReturnType),
+                [.. symbol.ParameterTypes.Select(context.ClrOf)]);
+        }
 
         foreach (var function in program.Functions)
         {
-            var il = methods[function.Symbol].GetILGenerator();
-            new BodyEmitter(il, methods, function.Symbol).EmitBlock(function.Body);
+            var il = context.Methods[function.Symbol].GetILGenerator();
+            new BodyEmitter(il, context, function.Symbol).EmitBlock(function.Body);
 
             // A function that returns a value ends with its own `return` (the binder guarantees it).
             if (function.Symbol.ReturnType == TypeSymbol.UnitType)
@@ -47,6 +58,10 @@ public static class Emitter
         }
 
         type.CreateType();
+        foreach (var structType in context.Structs.Values)
+        {
+            structType.CreateType();
+        }
 
         var metadata = assemblyBuilder.GenerateMetadata(out var ilStream, out var fieldData);
         var peBuilder = new ManagedPEBuilder(
@@ -54,7 +69,7 @@ public static class Emitter
             metadataRootBuilder: new MetadataRootBuilder(metadata),
             ilStream: ilStream,
             mappedFieldData: fieldData,
-            entryPoint: MetadataTokens.MethodDefinitionHandle(methods[program.EntryPoint].MetadataToken));
+            entryPoint: MetadataTokens.MethodDefinitionHandle(context.Methods[program.EntryPoint].MetadataToken));
 
         var peImage = new BlobBuilder();
         peBuilder.Serialize(peImage);
@@ -66,17 +81,56 @@ public static class Emitter
         RuntimeConfigWriter.Write(Path.Combine(outputDirectory, assemblyName + ".runtimeconfig.json"));
     }
 
+    // Each struct is a public sealed CLR value type with public fields, so C# can see it.
+    private static void DefineStructs(BoundProgram program, ModuleBuilder module, EmitContext context)
+    {
+        var valueType = ClrUniverse.CoreType("System.ValueType");
+        foreach (var structSymbol in program.Structs)
+        {
+            context.Structs[structSymbol] = module.DefineType(
+                structSymbol.Name,
+                TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.SequentialLayout,
+                valueType);
+        }
+
+        foreach (var structSymbol in program.Structs)
+        {
+            foreach (var field in structSymbol.Fields)
+            {
+                context.Fields[field] = context.Structs[structSymbol].DefineField(field.Name, context.ClrOf(field.Type), FieldAttributes.Public);
+            }
+        }
+    }
+
     /// <summary>Emits the body of one function. Holds the state that belongs to a single function: its local variables.</summary>
-    private sealed class BodyEmitter(ILGenerator il, Dictionary<UserFunctionSymbol, MethodBuilder> methods, UserFunctionSymbol function)
+    private sealed class BodyEmitter(ILGenerator il, EmitContext context, UserFunctionSymbol function)
     {
         private readonly Dictionary<VariableSymbol, LocalBuilder> _locals = [];
 
         // The jump targets of the loops we are inside, innermost on top.
         private readonly Stack<(Label Break, Label Continue)> _loops = new();
 
-        // Parameters are never assigned, so they are read straight from their argument slot.
-        private readonly Dictionary<VariableSymbol, short> _arguments =
-            function.Parameters.Select((parameter, index) => (parameter, index)).ToDictionary(p => p.parameter, p => (short)p.index);
+        // Parameters are never assigned, so they are read straight from their argument slot. In an instance method argument 0
+        // is the CLR `this`, which is `self`, so the declared parameters start at 1.
+        private readonly Dictionary<VariableSymbol, short> _arguments = ArgumentSlots(function);
+
+        private static Dictionary<VariableSymbol, short> ArgumentSlots(UserFunctionSymbol function)
+        {
+            var slots = new Dictionary<VariableSymbol, short>();
+            var first = 0;
+            if (function.SelfVariable is { } self)
+            {
+                slots[self] = 0;
+                first = 1;
+            }
+
+            for (var i = 0; i < function.Parameters.Length; i++)
+            {
+                slots[function.Parameters[i]] = (short)(first + i);
+            }
+
+            return slots;
+        }
 
         public void EmitBlock(BoundBlock block)
         {
@@ -128,9 +182,16 @@ public static class Emitter
                     il.Emit(OpCodes.Br, _loops.Peek().Continue);
                     break;
 
+                case BoundFieldAssignment fieldAssignment:
+                    // The address of the struct that holds the field, then the value, then store.
+                    EmitAddress(fieldAssignment.Target.Receiver);
+                    EmitExpression(fieldAssignment.Value);
+                    il.Emit(OpCodes.Stfld, context.Fields[fieldAssignment.Target.Field]);
+                    break;
+
                 case BoundVariableDeclaration declaration:
                     EmitExpression(declaration.Initializer);
-                    var local = il.DeclareLocal(declaration.Variable.Type.ClrType);
+                    var local = il.DeclareLocal(context.ClrOf(declaration.Variable.Type));
                     _locals[declaration.Variable] = local;
                     il.Emit(OpCodes.Stloc, local);
                     break;
@@ -171,6 +232,44 @@ public static class Emitter
 
                 case BoundVariableExpression variable:
                     il.Emit(OpCodes.Ldloc, _locals[variable.Variable]);
+                    break;
+
+                case BoundMethodCall methodCall:
+                    // The receiver goes by address, so a `&mut self` method changes the caller's struct.
+                    EmitAddress(methodCall.Receiver);
+                    foreach (var argument in methodCall.Arguments)
+                    {
+                        EmitExpression(argument);
+                    }
+
+                    il.Emit(OpCodes.Call, context.Methods[methodCall.Method]);
+                    break;
+
+                case BoundBorrowExpression borrow:
+                    EmitAddress(borrow.Place);
+                    break;
+
+                case BoundDereference dereference:
+                    EmitExpression(dereference.Borrow);
+                    il.Emit(OpCodes.Ldobj, context.ClrOf(dereference.Element));
+                    break;
+
+                case BoundStructLiteral structLiteral:
+                    EmitStructLiteral(structLiteral);
+                    break;
+
+                case BoundFieldAccess fieldAccess:
+                    // Reading through the address avoids copying the whole struct just to look at one field.
+                    if (BoundPlaces.IsPlace(fieldAccess.Receiver))
+                    {
+                        EmitAddress(fieldAccess.Receiver);
+                    }
+                    else
+                    {
+                        EmitExpression(fieldAccess.Receiver);
+                    }
+
+                    il.Emit(OpCodes.Ldfld, context.Fields[fieldAccess.Field]);
                     break;
 
                 case BoundUnaryExpression unary:
@@ -223,7 +322,7 @@ public static class Emitter
                             il.Emit(OpCodes.Call, clrMethod.Method);
                             break;
                         case UserFunctionSymbol user:
-                            il.Emit(OpCodes.Call, methods[user]);
+                            il.Emit(OpCodes.Call, context.Methods[user]);
                             break;
                         default:
                             throw new UnreachableException();
@@ -234,6 +333,56 @@ public static class Emitter
                 default:
                     throw new UnreachableException();
             }
+        }
+
+        // Pushes the address of a place. Anything else (a call result, say) is stored in a temporary first.
+        private void EmitAddress(BoundExpression place)
+        {
+            switch (place)
+            {
+                // A borrow already is an address (a managed pointer), so it is loaded, not addressed.
+                case BoundVariableExpression variable when variable.Variable.Type is BorrowTypeSymbol:
+                    il.Emit(OpCodes.Ldarg, _arguments[variable.Variable]);
+                    break;
+
+                case BoundVariableExpression variable when _arguments.TryGetValue(variable.Variable, out var index):
+                    il.Emit(OpCodes.Ldarga, index);
+                    break;
+
+                case BoundVariableExpression variable:
+                    il.Emit(OpCodes.Ldloca, _locals[variable.Variable]);
+                    break;
+
+                case BoundFieldAccess access:
+                    EmitAddress(access.Receiver);
+                    il.Emit(OpCodes.Ldflda, context.Fields[access.Field]);
+                    break;
+
+                default:
+                    EmitExpression(place);
+                    var temporary = il.DeclareLocal(context.ClrOf(place.Type));
+                    il.Emit(OpCodes.Stloc, temporary);
+                    il.Emit(OpCodes.Ldloca, temporary);
+                    break;
+            }
+        }
+
+        // Build in a temporary: zero it, store each field in the order written, then load the finished struct.
+        private void EmitStructLiteral(BoundStructLiteral literal)
+        {
+            var clrType = context.ClrOf(literal.Struct);
+            var temporary = il.DeclareLocal(clrType);
+
+            il.Emit(OpCodes.Ldloca, temporary);
+            il.Emit(OpCodes.Initobj, clrType);
+            foreach (var initializer in literal.Initializers)
+            {
+                il.Emit(OpCodes.Ldloca, temporary);
+                EmitExpression(initializer.Value);
+                il.Emit(OpCodes.Stfld, context.Fields[initializer.Field]);
+            }
+
+            il.Emit(OpCodes.Ldloc, temporary);
         }
 
         // `+` joins, `==` and `!=` compare the characters. No other operator is allowed on strings (the binder checks).

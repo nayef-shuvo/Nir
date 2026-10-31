@@ -1,0 +1,7 @@
+// Expect: NIR3002 "cannot assign to 'p.x' because 'p' is a read-only borrow ('&Point'); take '&mut' to change it" on line 4.
+type Point = struct { x: int }
+fn reset(p: &Point) {
+    p.x = 0
+}
+fn main() {
+}

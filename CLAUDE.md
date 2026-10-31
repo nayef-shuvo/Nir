@@ -23,9 +23,9 @@ Update this block whenever a task is completed.
   `Clr/ClrUniverse` (a `MetadataLoadContext`); never use `typeof(...)` for a type that reaches the emitter.
 - Slice 5 (control flow): **done** (T5.0 to T5.3, 587 tests green).
 - Slice 6 (strings and conversions): **done** (T6.0 to T6.3, 717 tests green).
-- Next: **slice 7 (structs, methods, mutability by path)**. It has no task list yet: first ask the user the decisions listed
-  in design.md sections 2 to 6 that are still tagged proposed or open (type declaration syntax, struct literal syntax,
-  stored references), record the answers, write tasks `T7.0`... in `docs/roadmap.md`, then start.
+- Slice 7 (structs, methods, borrows): **done** (T7.0 to T7.4, 933 tests green).
+- Next: **slice 8 (tuples, unions, `match`)**. Ask the user its open design decisions first (design.md section 11), then
+  write the `T8.x` tasks in `docs/roadmap.md`.
 
 ## How to pick up work
 

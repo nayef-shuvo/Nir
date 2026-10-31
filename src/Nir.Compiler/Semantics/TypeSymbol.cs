@@ -3,7 +3,7 @@ using Nir.Compiler.Clr;
 namespace Nir.Compiler.Semantics;
 
 /// <summary>A Nir type and the CLR type it compiles to.</summary>
-public sealed class TypeSymbol
+public class TypeSymbol
 {
     /// <summary>The "nothing" type <c>()</c>. Compiles to <c>void</c>.</summary>
     public static readonly TypeSymbol UnitType = new("()", ClrUniverse.CoreType("System.Void"));
@@ -25,8 +25,16 @@ public sealed class TypeSymbol
     private TypeSymbol(string name, Type clrType)
     {
         Name = name;
-        ClrType = clrType;
+        _clrType = clrType;
     }
+
+    /// <summary>For types whose CLR type does not exist until Emit creates it (structs).</summary>
+    private protected TypeSymbol(string name)
+    {
+        Name = name;
+    }
+
+    private readonly Type? _clrType;
 
     /// <summary>The Nir type for a CLR type, or <c>null</c> if Nir cannot use that type yet.</summary>
     internal static TypeSymbol? FromClr(Type clrType) => clrType.FullName switch
@@ -41,7 +49,9 @@ public sealed class TypeSymbol
 
     public string Name { get; }
 
-    public Type ClrType { get; }
+    /// <summary>The CLR type this compiles to. A struct has none until Emit defines it, so asking is a bug.</summary>
+    public virtual Type ClrType =>
+        _clrType ?? throw new InvalidOperationException($"'{Name}' has no CLR type of its own; the emitter maps it.");
 
     public override string ToString() => Name;
 }

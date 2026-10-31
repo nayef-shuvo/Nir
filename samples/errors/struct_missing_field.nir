@@ -1,0 +1,5 @@
+// Expect: NIR2017 "missing field 'y' in 'Point'" on line 4.
+type Point = struct { x: int, y: int }
+fn main() {
+    let p = Point { x = 1 }
+}

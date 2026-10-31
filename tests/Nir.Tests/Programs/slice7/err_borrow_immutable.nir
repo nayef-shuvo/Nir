@@ -1,0 +1,8 @@
+type P = struct { x: int }
+fn bump(p: &mut P) {
+    p.x = p.x + 1
+}
+fn main() {
+    let p = P { x = 1 }
+    bump(&mut p)
+}

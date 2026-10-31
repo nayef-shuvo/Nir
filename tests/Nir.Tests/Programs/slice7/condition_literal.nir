@@ -1,0 +1,17 @@
+type P = struct { n: int }
+
+fn main() {
+    let p = P { n = 3 }
+    let limit = P { n = 3 }
+    if p.n == limit.n {
+        print("same")
+    }
+    if (P { n = 1 }).n == 1 {
+        print("parenthesised")
+    }
+    let mut i = 0
+    while i != limit.n {
+        i = i + 1
+    }
+    print(i)
+}

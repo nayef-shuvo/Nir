@@ -24,6 +24,10 @@ IN: 'in';
 BREAK: 'break';
 CONTINUE: 'continue';
 AS: 'as';
+TYPE: 'type';
+STRUCT: 'struct';
+IMPL: 'impl';
+SELF: 'self';
 TRUE: 'true';
 FALSE: 'false';
 
@@ -31,6 +35,7 @@ ARROW: '->';
 DOTDOTEQ: '..=';
 DOTDOT: '..';
 AMPAMP: '&&';
+AMP: '&';
 PIPEPIPE: '||';
 BANG: '!';
 EQEQ: '==';

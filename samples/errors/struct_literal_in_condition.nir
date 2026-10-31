@@ -1,0 +1,7 @@
+// Expect: NIR1001 (syntax error) on line 5. A struct literal in an `if` head needs parentheses: `if p == (Point { x = 1 }) {`.
+type Point = struct { x: int }
+fn main() {
+    let p = Point { x = 1 }
+    if p == Point { x = 1 } {
+    }
+}

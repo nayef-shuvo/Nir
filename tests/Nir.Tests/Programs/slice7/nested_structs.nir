@@ -1,0 +1,21 @@
+type Point = struct { x: int, y: int }
+type Line = struct {
+    from: Point
+    to: Point
+    label: string
+}
+
+fn main() {
+    let mut line = Line {
+        from = Point { x = 1, y = 2 },
+        to = Point { x = 5, y = 8 },
+        label = "diagonal",
+    }
+    line.to.x = line.to.x + 10
+    line.from.y = 0
+    print(line.from.x)
+    print(line.from.y)
+    print(line.to.x)
+    print(line.to.y)
+    print(line.label)
+}

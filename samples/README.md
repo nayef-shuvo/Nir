@@ -22,6 +22,7 @@ src/Nir.Cli/bin/Debug/net10.0/nir run samples/arithmetic.nir
 | `recursion.nir` | factorial, fibonacci, mutual recursion |
 | `dotnet_math.nir` | `using clr::cs::...`, `Math::Sqrt`, `Int32::Parse`, `Console::WriteLine` |
 | `dotnet_strings.nir` | methods on values: `"text".Trim().ToUpper()`, `42.ToString()` |
+| `structs.nir` | `type P = struct {..}`, `P impl {..}`, `&self` / `&mut self`, `&` / `&mut` arguments, copies, nested structs |
 | `file_io.nir` | writing, reading and deleting a file through `System.IO` |
 
 ## Programs with a compile error (`errors/`)

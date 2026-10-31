@@ -1,0 +1,4 @@
+fn f(n: &mut int) {
+}
+fn main() {
+}
