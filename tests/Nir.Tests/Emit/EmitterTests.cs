@@ -56,10 +56,154 @@ public class EmitterTests
     }
 
     [Fact]
+    public void Runtimeconfig_requests_invariant_globalization()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nir-tests-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var result = TestHost.Compile("fn main() {\n}");
+            Nir.Compiler.NirCompiler.Emit(result, "program", directory);
+
+            var json = File.ReadAllText(Path.Combine(directory, "program.runtimeconfig.json"));
+
+            Assert.Contains("\"System.Globalization.Invariant\":true", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Backslashes_in_strings_are_printed_as_written()
     {
         var (stdout, _, _) = TestHost.Run("fn main() {\n    print(\"a\\nb\")\n}");
 
         Assert.Equal("a\\nb\n", stdout);
+    }
+
+    [Fact]
+    public void Prints_int()
+    {
+        var (stdout, _, _) = TestHost.Run("fn main() {\n    print(10)\n    print(2147483647)\n}");
+
+        Assert.Equal("10\n2147483647\n", stdout);
+    }
+
+    [Fact]
+    public void Prints_double()
+    {
+        var (stdout, _, _) = TestHost.Run("fn main() {\n    print(2.5)\n    print(10.0)\n}");
+
+        Assert.Equal("2.5\n10\n", stdout);
+    }
+
+    [Fact]
+    public void Prints_bool()
+    {
+        var (stdout, _, _) = TestHost.Run("fn main() {\n    print(true)\n    print(false)\n}");
+
+        Assert.Equal("True\nFalse\n", stdout);
+    }
+
+    private static readonly (string Expression, string Expected)[] _operations =
+    [
+        ("1 + 2", "3"), ("7 - 10", "-3"), ("6 * 7", "42"), ("10 / 3", "3"), ("-7 / 2", "-3"), ("-7 % 3", "-1"), ("10 % 3", "1"),
+        ("-5", "-5"), ("- -5", "5"), ("2 + 3 * 4", "14"), ("(2 + 3) * 4", "20"), ("10 - 2 - 3", "5"),
+        ("-2147483647 - 1", "-2147483648"), ("2147483647 - 2147483647", "0"),
+        ("1.5 + 2.25", "3.75"), ("10.0 / 4.0", "2.5"), ("7.5 % 2.0", "1.5"), ("-2.5", "-2.5"), ("0.5 * 3.0", "1.5"),
+        ("1.0 / 0.0", "Infinity"), ("-1.0 / 0.0", "-Infinity"), ("0.0 / 0.0", "NaN"),
+        ("1 < 2", "True"), ("2 < 2", "False"), ("2 <= 2", "True"), ("3 <= 2", "False"),
+        ("3 > 2", "True"), ("2 > 2", "False"), ("2 >= 2", "True"), ("2 >= 3", "False"),
+        ("1 == 1", "True"), ("1 == 2", "False"), ("1 != 1", "False"), ("1 != 2", "True"),
+        ("1.0 == 1.0", "True"), ("1.5 < 2.5", "True"), ("2.5 <= 2.5", "True"), ("2.5 >= 2.6", "False"),
+        ("true == false", "False"), ("true != false", "True"), ("true == true", "True"),
+        ("0.0 / 0.0 == 0.0 / 0.0", "False"), ("0.0 / 0.0 != 0.0 / 0.0", "True"),
+        ("0.0 / 0.0 <= 1.0", "False"), ("0.0 / 0.0 >= 1.0", "False"), ("0.0 / 0.0 < 1.0", "False"), ("0.0 / 0.0 > 1.0", "False"),
+        ("1 + 2 < 4", "True"), ("1 < 2 == true", "True"),
+    ];
+
+    [Fact]
+    public void Operators_compute_the_expected_values()
+    {
+        var program = "fn main() {\n" + string.Join("\n", _operations.Select(o => $"    print({o.Expression})")) + "\n}";
+
+        var (stdout, stderr, exitCode) = TestHost.Run(program);
+
+        Assert.Equal(string.Empty, stderr);
+        Assert.Equal(0, exitCode);
+        // Compare line by line so a failure names the expression that went wrong.
+        var lines = stdout.TrimEnd('\n').Split('\n');
+        for (var i = 0; i < _operations.Length; i++)
+        {
+            Assert.True(_operations[i].Expected == lines[i], $"{_operations[i].Expression}: expected {_operations[i].Expected} but got {lines[i]}");
+        }
+    }
+
+    [Theory]
+    [InlineData("2147483647 + 1", "OverflowException")]
+    [InlineData("-2147483647 - 2", "OverflowException")]
+    [InlineData("65536 * 65536", "OverflowException")]
+    [InlineData("1 / 0", "DivideByZeroException")]
+    [InlineData("1 % 0", "DivideByZeroException")]
+    public void Integer_failures_crash_the_program(string expression, string exception)
+    {
+        var (stdout, stderr, exitCode) = TestHost.Run($"fn main() {{\n    print(1)\n    print({expression})\n}}");
+
+        Assert.Equal("1\n", stdout);
+        Assert.NotEqual(0, exitCode);
+        Assert.Contains(exception, stderr, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Variable_holds_its_value()
+    {
+        var (stdout, _, _) = TestHost.Run("fn main() {\n    let x = 10\n    print(x)\n}");
+
+        Assert.Equal("10\n", stdout);
+    }
+
+    [Fact]
+    public void Mutable_variable_can_be_reassigned()
+    {
+        var (stdout, _, _) = TestHost.Run("fn main() {\n    let mut x = 1\n    print(x)\n    x = x + 1\n    x = x * 10\n    print(x)\n}");
+
+        Assert.Equal("1\n20\n", stdout);
+    }
+
+    [Fact]
+    public void Variables_of_every_type()
+    {
+        var (stdout, _, _) = TestHost.Run(
+            "fn main() {\n    let i = 7\n    let d: double = 2.5\n    let b = 1 < 2\n    let s = \"text\"\n    print(i)\n    print(d)\n    print(b)\n    print(s)\n}");
+
+        Assert.Equal("7\n2.5\nTrue\ntext\n", stdout);
+    }
+
+    [Fact]
+    public void Variables_combine_in_expressions()
+    {
+        var (stdout, _, _) = TestHost.Run("fn main() {\n    let a = 6\n    let b = 7\n    let mut c = a * b\n    c = c - a\n    print(c)\n    print(c > a)\n}");
+
+        Assert.Equal("36\nTrue\n", stdout);
+    }
+
+    [Fact]
+    public void Each_function_has_its_own_variables()
+    {
+        var (stdout, _, _) = TestHost.Run(
+            "fn other() {\n    let x = 1\n    print(x)\n}\nfn main() {\n    let x = 2\n    other()\n    print(x)\n}");
+
+        Assert.Equal("1\n2\n", stdout);
+    }
+
+    [Fact]
+    public void Failing_arithmetic_in_an_initializer_crashes()
+    {
+        var (stdout, stderr, exitCode) = TestHost.Run("fn main() {\n    let x = 2147483647\n    let y = x + 1\n    print(y)\n}");
+
+        Assert.Equal(string.Empty, stdout);
+        Assert.NotEqual(0, exitCode);
+        Assert.Contains("OverflowException", stderr, StringComparison.Ordinal);
     }
 }

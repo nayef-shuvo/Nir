@@ -316,6 +316,94 @@ variable, `int + double`, redeclaring a name in the same block, and a division c
 stderr contains `OverflowException`); this one is a normal xUnit test in `Emit/`, not a golden program, because the exit
 code differs per OS.
 
+**Details fixed for this slice (so nothing is left to guess):**
+- Grammar additions: keywords `let`, `mut`, `true`, `false`; tokens `COLON` `EQ` `PLUS` `MINUS` `STAR` `SLASH` `PERCENT`
+  `LT` `LE` `GT` `GE` `EQEQ` `NEQ`, `INT_LITERAL` (`[0-9]+`), `DOUBLE_LITERAL` (`[0-9]+ '.' [0-9]+`).
+  `EndsStatement` gains `INT_LITERAL`, `DOUBLE_LITERAL`, `TRUE`, `FALSE`. Each new one needs a lexer test.
+- Precedence, highest first: unary `-`; `* / %`; `+ -`; `< <= > >=`; `== !=`. All binary operators are left-associative.
+- Statements: `let [mut] name [: type] = expression`, `name = expression`, expression statement. A type annotation is a
+  plain identifier naming `int`, `double`, `bool` or `string`.
+- AST additions: `VariableDeclaration`, `AssignmentStatement`, `BinaryExpression`, `UnaryExpression`,
+  `ParenthesizedExpression`, `NameExpression`, `IntLiteralExpression(string Text)`, `DoubleLiteralExpression(string Text)`,
+  `BoolLiteralExpression(bool Value)`. Literal text is converted by the binder so out-of-range literals get a diagnostic.
+- Operator typing: `+ - * / %` on `int,int` giving `int` or `double,double` giving `double`. `< <= > >=` on two `int` or
+  two `double` giving `bool`. `== !=` on two `int`, two `double` or two `bool` giving `bool` (`string` comparison and
+  `string` `+` come in slice 5). Unary `-` on `int` or `double`. Anything else is `NIR3003`.
+- Integer literals above 2147483647 are an error (`NIR3004`). So `-2147483648` cannot be written yet.
+- Error recovery: a failed expression binds to `BoundErrorExpression` of `TypeSymbol.ErrorType`. Any operation that
+  receives an error-typed operand yields an error-typed result and reports nothing more. A variable whose initializer
+  failed is still declared (with `ErrorType`), so later uses do not report `NIR2001`.
+- Scope: one flat scope per function body. A variable is visible only after its declaration, and `let x = x` does not
+  see the new `x` (it reports `NIR2001` for the initializer).
+- `print` has four overloads (`int`, `double`, `bool`, `string`). Overload choice is an exact match of the argument
+  type. No overload with the right argument count gives `NIR2004`; the right count but no matching type gives `NIR3006`.
+  (`print(greet())` with a unit-returning `greet` therefore changes from `NIR3001` to `NIR3006`, at the call start.)
+- The emitted program's runtimeconfig sets `System.Globalization.Invariant` to `true`, so numbers print the same on every
+  machine (`2.5`, never `2,5`).
+- New diagnostic codes: `NIR2005` `'{name}' is already declared in this block`; `NIR2006` `unknown type '{name}'`;
+  `NIR3002` `cannot assign to '{name}' because it is not mutable`; `NIR3003`
+  `operator '{op}' cannot be applied to '{left}' and '{right}'` (unary: `operator '{op}' cannot be applied to '{type}'`);
+  `NIR3004` `'{text}' is out of range for '{type}'`; `NIR3005` `cannot declare '{name}' with type '()'`;
+  `NIR3006` `no overload of '{name}' accepts ({types})`. Reuse `NIR3001` for initializer and assignment mismatches and
+  `NIR2001` for undefined variables.
+
+### Tasks
+
+- [x] **T2.0 Error type, print overloads, invariant runtimeconfig**
+  - Add `TypeSymbol.IntType`, `DoubleType`, `BoolType`, `ErrorType`; `BoundErrorExpression`. Change the binder so a
+    failed expression returns `BoundErrorExpression` instead of `null`, and calls with error-typed arguments report
+    nothing more. `Bind` still returns `null` if this call reported any error.
+  - `BuiltinFunctions` holds a list of overloads per name. Four `print` overloads bound to `Console.WriteLine(int | double | bool | string)`.
+  - Add `NIR3006` and the binder overload rule above. Update the golden program `unit_as_string.diag` to `4:5 NIR3006`.
+  - `RuntimeConfigWriter` adds `"configProperties": {"System.Globalization.Invariant": true}`.
+  - Tests: existing tests still pass; binder test `Print_with_unit_argument_reports_NIR3006`.
+  - **Done when:** `dotnet test` is green and `architecture.md` section 7 mentions the new types and overload rule.
+
+- [x] **T2.1 Literals**
+  - Lexer: `INT_LITERAL`, `DOUBLE_LITERAL`, `TRUE`, `FALSE` (keywords before `IDENTIFIER`), `EndsStatement` update.
+    Tests: `Int_literal`, `Double_literal`, `Digits_then_dot_without_digit_is_not_a_double` (`1.` lexes `INT_LITERAL`,
+    then reports `NIR0001` for the `.`), `Newline_after_literal_becomes_semicolon` (one per new token),
+    `True_and_false_are_keywords`.
+  - Parser/AST/AstBuilder: the three literal nodes and a `NameExpression`-free first cut (names come in T2.3).
+  - Binder: `BoundIntLiteral`, `BoundDoubleLiteral`, `BoundBoolLiteral`; `NIR3004` for an int above 2147483647 or a
+    double that parses to infinity.
+  - Emitter: `ldc.i4`, `ldc.r8`, `ldc.i4.0/1`.
+  - Tests: parser tree tests for each literal; binder `Int_literal_out_of_range_reports_NIR3004`;
+    emit tests `Prints_int`, `Prints_double` (`2.5`), `Prints_bool` (`true`/`false` as .NET prints them: `True`/`False`).
+  - **Done when:** these pass. (Note: `Console.WriteLine(true)` prints `True`; that is the accepted output.)
+
+- [x] **T2.2 Operators**
+  - Lexer tokens for the operators; grammar `expression` rule as a precedence ladder with labeled alternatives;
+    `BinaryExpression`, `UnaryExpression`, `ParenthesizedExpression`, operator enums.
+  - Binder: the typing rules above; `BoundBinaryExpression`, `BoundUnaryExpression`; `NIR3003`.
+  - Emitter: checked integer arithmetic (`add.ovf`, `sub.ovf`, `mul.ovf`, unary minus as `0 - x` with `sub.ovf`),
+    `div`, `rem`; plain `add sub mul div rem neg` for doubles; comparisons as described under "Locals" above, using
+    `cgt.un` / `clt.un` for the "or equal" forms on doubles so NaN comparisons are false.
+  - Tests: parser precedence and associativity (`1 + 2 * 3`, `1 - 2 - 3`, `-1 * 2`, `(1 + 2) * 3`, `1 < 2 == true`);
+    binder `Int_plus_double_reports_NIR3003`, `Minus_on_bool_reports_NIR3003`, `Error_operand_reports_nothing_more`;
+    emit tests for every operator on `int` and `double`, including `10 / 3` is `3`, `10.0 / 4.0` is `2.5`, `-7 % 3` is `-1`,
+    `5 > 3` is `True`, NaN comparisons (`0.0 / 0.0 == 0.0 / 0.0` is `False`), division by zero crashes,
+    `2147483647 + 1` crashes with `OverflowException`.
+  - **Done when:** these pass.
+
+- [x] **T2.3 Variables and scopes**
+  - Lexer: `LET`, `MUT`, `COLON`, `EQ`; parser: the three statement forms; AST nodes; `NameExpression`.
+  - Binder: a `VariableSymbol`; flat per-function scope; declaration after initializer; `NIR2005`, `NIR2006`, `NIR3002`,
+    `NIR3005`, `NIR3001` for annotation/assignment mismatches, `NIR2001` for unknown variables; annotated declarations
+    check the initializer type; unannotated take it. Error-typed initializer still declares the variable.
+  - Emitter: `DeclareLocal` per variable, `stloc`, `ldloc`.
+  - Tests: parser trees for each statement form; binder tests for every new code with positions;
+    emit tests: declare and print, `let mut` reassignment, use in an expression, a program using several variables.
+  - **Done when:** these pass.
+
+- [x] **T2.4 Program tests, overflow test, wrap-up**
+  - Add the `Programs/slice2/` golden programs (arithmetic ints and doubles, comparisons, `let mut` reassignment,
+    annotation, each error listed in the acceptance programs) and `Slice2ProgramTests`.
+  - The overflow xUnit test in `Emit/`.
+  - Update `architecture.md` (sections 4 table, 5, 6, 7, 8) and `design.md` if anything changed, tick the tasks, update
+    the status block in `CLAUDE.md`, append decisions to `decisions.md`, and add `semicolons`-style notes if needed.
+  - **Done when:** all acceptance programs for slice 2 pass, `dotnet build` has 0 warnings, `dotnet test` is green.
+
 ---
 
 ## Slice 3: functions with parameters and results

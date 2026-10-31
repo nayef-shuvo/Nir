@@ -169,6 +169,10 @@ public abstract class NirLexerBase : Antlr4.Runtime.Lexer
     /// </summary>
     private static bool EndsStatement(int tokenType) => tokenType is
         NirLexer.IDENTIFIER or
+        NirLexer.INT_LITERAL or
+        NirLexer.DOUBLE_LITERAL or
+        NirLexer.TRUE or
+        NirLexer.FALSE or
         NirLexer.STRING_END or
         NirLexer.RPAREN or
         NirLexer.RBRACE;

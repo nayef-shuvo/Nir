@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using Antlr4.Runtime;
 using Nir.Compiler.Diagnostics;
 using Nir.Compiler.Syntax;
@@ -47,24 +48,93 @@ internal sealed class AstBuilder(SourceText source)
 
     private Statement? BuildStatement(NirParser.StatementContext context)
     {
+        if (context.variableDeclaration() is { } declaration)
+        {
+            return BuildVariableDeclaration(declaration);
+        }
+
+        if (context.assignmentStatement() is { } assignment)
+        {
+            return BuildAssignment(assignment);
+        }
+
         var expression = BuildExpression(context.expression());
         return expression is null ? null : new ExpressionStatement(expression, SpanOf(context));
     }
 
-    private Expression? BuildExpression(NirParser.ExpressionContext? context)
+    private VariableDeclaration? BuildVariableDeclaration(NirParser.VariableDeclarationContext context)
     {
-        if (context is null)
+        var name = BuildIdentifier(context.name);
+        var initializer = BuildExpression(context.value);
+        if (name is null || initializer is null)
         {
             return null;
         }
 
-        if (context.callExpression() is { } call)
-        {
-            return BuildCall(call);
-        }
-
-        return context.stringLiteral() is { } literal ? BuildStringLiteral(literal) : null;
+        return new VariableDeclaration(name, context.MUT() is not null, BuildIdentifier(context.declaredType), initializer, SpanOf(context));
     }
+
+    private AssignmentStatement? BuildAssignment(NirParser.AssignmentStatementContext context)
+    {
+        var target = BuildIdentifier(context.target);
+        var value = BuildExpression(context.value);
+
+        return target is null || value is null ? null : new AssignmentStatement(target, value, SpanOf(context));
+    }
+
+    private Expression? BuildExpression(NirParser.ExpressionContext? context) => context switch
+    {
+        null => null,
+        NirParser.UnaryExpressionContext u => BuildUnary(u),
+        NirParser.MultiplicativeExpressionContext m => BuildBinary(m, m.left, m.op, m.right),
+        NirParser.AdditiveExpressionContext a => BuildBinary(a, a.left, a.op, a.right),
+        NirParser.RelationalExpressionContext r => BuildBinary(r, r.left, r.op, r.right),
+        NirParser.EqualityExpressionContext e => BuildBinary(e, e.left, e.op, e.right),
+        NirParser.CallExprContext c => c.callExpression() is { } call ? BuildCall(call) : null,
+        NirParser.ParenthesizedExpressionContext p => BuildExpression(p.inner) is { } inner ? new ParenthesizedExpression(inner, SpanOf(p)) : null,
+        NirParser.StringExprContext s => s.stringLiteral() is { } literal ? BuildStringLiteral(literal) : null,
+        NirParser.IntExprContext i => new IntLiteralExpression(i.INT_LITERAL().GetText(), SpanOf(i)),
+        NirParser.DoubleExprContext d => new DoubleLiteralExpression(d.DOUBLE_LITERAL().GetText(), SpanOf(d)),
+        NirParser.TrueExprContext t => new BoolLiteralExpression(true, SpanOf(t)),
+        NirParser.FalseExprContext f => new BoolLiteralExpression(false, SpanOf(f)),
+        NirParser.NameExprContext n => BuildIdentifier(n.IDENTIFIER().Symbol) is { } name ? new NameExpression(name, SpanOf(n)) : null,
+
+        // After a syntax error ANTLR can leave a bare ExpressionContext with no alternative chosen. It is not a bug.
+        _ => null,
+    };
+
+    private UnaryExpression? BuildUnary(NirParser.UnaryExpressionContext context) =>
+        BuildExpression(context.operand) is { } operand
+            ? new UnaryExpression(UnaryOperator.Negate, operand, SpanOf(context))
+            : null;
+
+    private BinaryExpression? BuildBinary(
+        NirParser.ExpressionContext context,
+        NirParser.ExpressionContext? leftContext,
+        IToken op,
+        NirParser.ExpressionContext? rightContext)
+    {
+        var left = BuildExpression(leftContext);
+        var right = BuildExpression(rightContext);
+
+        return left is null || right is null ? null : new BinaryExpression(left, ToBinaryOperator(op), right, SpanOf(context));
+    }
+
+    private static BinaryOperator ToBinaryOperator(IToken token) => token.Type switch
+    {
+        NirParser.PLUS => BinaryOperator.Add,
+        NirParser.MINUS => BinaryOperator.Subtract,
+        NirParser.STAR => BinaryOperator.Multiply,
+        NirParser.SLASH => BinaryOperator.Divide,
+        NirParser.PERCENT => BinaryOperator.Remainder,
+        NirParser.LT => BinaryOperator.Less,
+        NirParser.LE => BinaryOperator.LessOrEqual,
+        NirParser.GT => BinaryOperator.Greater,
+        NirParser.GE => BinaryOperator.GreaterOrEqual,
+        NirParser.EQEQ => BinaryOperator.Equal,
+        NirParser.NEQ => BinaryOperator.NotEqual,
+        _ => throw new UnreachableException(),
+    };
 
     private CallExpression? BuildCall(NirParser.CallExpressionContext context)
     {
@@ -88,10 +158,13 @@ internal sealed class AstBuilder(SourceText source)
     private static Identifier? BuildIdentifier(IToken? token) =>
         IsMissing(token)
             ? null
-            : new Identifier(token!.Text, new TextSpan(token.StartIndex, token.StopIndex - token.StartIndex + 1));
+            : new Identifier(token!.Text, SpanOf(token));
 
     // ANTLR conjures tokens it expected but did not find (error recovery); they have no source position.
     private static bool IsMissing(IToken? token) => token is null || token.StartIndex < 0;
+
+    private static TextSpan SpanOf(IToken token) =>
+        new(token.StartIndex, token.StopIndex - token.StartIndex + 1);
 
     private static TextSpan SpanOf(ParserRuleContext context)
     {

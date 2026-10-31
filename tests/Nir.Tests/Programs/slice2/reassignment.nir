@@ -1,0 +1,8 @@
+fn main() {
+    let mut counter = 0
+    counter = counter + 1
+    counter = counter + 1
+    print(counter)
+    let flag: bool = counter > 1
+    print(flag)
+}

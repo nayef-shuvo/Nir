@@ -121,7 +121,7 @@ Codes are never reused or renumbered. Each code is a `public const string` in a 
 period, names in single quotes, say what is wrong, not what to do. Example: `'x' is not defined`,
 `cannot assign to 'x' because it is not mutable`.
 
-Codes defined in slice 1:
+Codes defined so far (slices 1 and 2):
 
 | Code | Meaning | Message template |
 |---|---|---|
@@ -132,7 +132,14 @@ Codes defined in slice 1:
 | NIR2002 | missing entry point | `program has no 'main' function` |
 | NIR2003 | duplicate function | `function '{name}' is already defined` |
 | NIR2004 | wrong argument count | `'{name}' expects {n} argument(s) but got {m}` |
+| NIR2005 | name declared twice in one block | `'{name}' is already declared in this block` |
+| NIR2006 | unknown type in an annotation | `unknown type '{name}'` |
 | NIR3001 | type mismatch | `cannot convert '{from}' to '{to}'` |
+| NIR3002 | assignment to a non-`mut` variable | `cannot assign to '{name}' because it is not mutable` |
+| NIR3003 | operator not defined for these types | `operator '{op}' cannot be applied to '{left}' and '{right}'` (unary: `... to '{type}'`) |
+| NIR3004 | literal out of range | `'{text}' is out of range for '{type}'` |
+| NIR3005 | variable would have type `()` | `cannot declare '{name}' with type '()'` |
+| NIR3006 | no overload accepts the argument types | `no overload of '{name}' accepts ({types})` |
 
 ## 5. Parsing (`Nir.Compiler.Parsing`)
 
@@ -178,7 +185,7 @@ The newline logic was ported from `reference/NirLexerBase.cs`; do not redesign i
 file replaces the old single stashed `EOF`.
 
 **Keywords.** A keyword is added to the lexer grammar in the slice that first uses it. Keywords are listed before
-`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Slice 1 keywords: `fn`.
+`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Keywords so far: `fn`, `let`, `mut`, `true`, `false`.
 
 **Strings.** Plain strings use lexer modes: `STRING_START`, `STRING_TEXT`, `STRING_END`. The lexer keeps raw text;
 escape sequences are decoded by `AstBuilder` (from slice 5). In slice 1 a `StringLiteralExpression.Value` is the raw text
@@ -218,6 +225,13 @@ public sealed record CallExpression(Identifier Callee, ImmutableArray<Expression
 public sealed record StringLiteralExpression(string Value, TextSpan Span) : Expression(Span);
 ```
 
+Slice 2 adds: `VariableDeclaration(Name, IsMutable, DeclaredType?, Initializer)` and `AssignmentStatement(Target, Value)`
+(statements); `NameExpression`, `IntLiteralExpression(Text)`, `DoubleLiteralExpression(Text)`, `BoolLiteralExpression(Value)`,
+`UnaryExpression(Operator, Operand)`, `BinaryExpression(Left, Operator, Right)` and `ParenthesizedExpression(Inner)`
+(expressions); the `BinaryOperator` / `UnaryOperator` enums and `OperatorText` (operator spelling for messages).
+Literal text stays a string so the binder can report out-of-range values. The expression grammar is a precedence ladder:
+unary `-`, then `* / %`, `+ -`, `< <= > >=`, `== !=`, all left-associative.
+
 Later slices add nodes; they never change the meaning of existing ones. Each node type is created only by
 `AstBuilder`. `Span` covers the node's full source text, from its first token to its last.
 
@@ -244,6 +258,29 @@ public sealed record BoundCallExpression(FunctionSymbol Target, ImmutableArray<B
     : BoundExpression(Target.ReturnType);
 public sealed record BoundStringLiteral(string Value) : BoundExpression(TypeSymbol.StringType);
 ```
+
+Slice 2 adds to the bound tree: `BoundVariableDeclaration`, `BoundAssignment` (statements); `BoundVariableExpression`,
+`BoundIntLiteral`, `BoundDoubleLiteral`, `BoundBoolLiteral`, `BoundUnaryExpression`, `BoundBinaryExpression` and
+`BoundErrorExpression` (expressions); the `BoundBinaryOperator` / `BoundUnaryOperator` enums (separate from the syntax
+ones, because Emit may not reference Syntax); and `VariableSymbol(Name, Type, IsMutable)`.
+`TypeSymbol` gains `IntType`, `DoubleType`, `BoolType` and `ErrorType`.
+
+**Error recovery.** `BindExpression` never returns null. A failed expression becomes `BoundErrorExpression` with
+`TypeSymbol.ErrorType`. Anything that receives an error-typed operand reports nothing more and yields an error type, so
+one mistake gives one diagnostic. A variable whose initializer failed is still declared, with `ErrorType`.
+
+**Scope.** One flat dictionary of variables per function body, reset for each function. A variable is visible only after
+its declaration; the initializer is bound before the variable is declared, so `let x = x` does not see the new `x`.
+Redeclaring a name reports `NIR2005` and keeps the first declaration. Types are looked up by name in `LookupType`
+(`int`, `double`, `bool`, `string`).
+
+**Operator typing.** Both operands must have the same type (no implicit conversions). `+ - * / %` need `int` or `double`
+and give that type; `< <= > >=` need `int` or `double` and give `bool`; `== !=` need `int`, `double` or `bool` and give
+`bool`; unary `-` needs `int` or `double`. Anything else is `NIR3003`, reported at the start of the expression.
+
+**Overloads.** `BuiltinFunctions` holds a list of overloads per name (`print` has `int`, `double`, `bool`, `string`,
+each bound to the matching `Console.WriteLine`). A user function with the same name wins. For a built-in: no overload with
+the argument count gives `NIR2004`; the right count but no exact type match gives `NIR3006` at the call start.
 
 Entry point:
 
@@ -290,6 +327,15 @@ Approach (verified by T1.1, see section 9):
 - The `.runtimeconfig.json` is needed for `dotnet x.dll` to start:
   `{"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"<installed 10.x>"}}}`.
   `RuntimeConfigWriter` writes it. The version string comes from `Environment.Version` major, written as `10.0.0`.
+
+Slice 2 additions to emit (`BodyEmitter`, a private class holding the per-function state, which is the local variables):
+- Locals: `DeclareLocal` at each declaration, `stloc` / `ldloc`.
+- Integer `+ - *` use `add.ovf` / `sub.ovf` / `mul.ovf` (overflow throws, design.md "Numbers"); integer negation is `0 - x`
+  with `sub.ovf`; `div` and `rem` throw on division by zero. `double` arithmetic uses plain `add sub mul div rem neg`.
+- Comparisons use `clt cgt ceq`. `<=` and `>=` are "not greater" / "not less", using `cgt.un` / `clt.un` for `double` so a
+  NaN operand makes them false. `!=` is `ceq` then not.
+- The generated runtimeconfig also sets `configProperties: {"System.Globalization.Invariant": true}` so numbers print
+  the same on every machine (`2.5`, never `2,5`). `Console.WriteLine(true)` prints `True` (accepted output).
 
 Emit never reports user errors. If something it cannot emit reaches it, that is a compiler bug: throw
 `InvalidOperationException` with a clear message.

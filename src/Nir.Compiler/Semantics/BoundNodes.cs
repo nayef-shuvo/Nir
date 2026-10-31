@@ -15,9 +15,51 @@ public abstract record BoundStatement : BoundNode;
 
 public sealed record BoundExpressionStatement(BoundExpression Expression) : BoundStatement;
 
+public sealed record BoundVariableDeclaration(VariableSymbol Variable, BoundExpression Initializer) : BoundStatement;
+
+public sealed record BoundAssignment(VariableSymbol Variable, BoundExpression Value) : BoundStatement;
+
 public abstract record BoundExpression(TypeSymbol Type) : BoundNode;
 
 public sealed record BoundCallExpression(FunctionSymbol Target, ImmutableArray<BoundExpression> Arguments)
     : BoundExpression(Target.ReturnType);
 
 public sealed record BoundStringLiteral(string Value) : BoundExpression(TypeSymbol.StringType);
+
+public sealed record BoundVariableExpression(VariableSymbol Variable) : BoundExpression(Variable.Type);
+
+public enum BoundBinaryOperator
+{
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
+    Less,
+    LessOrEqual,
+    Greater,
+    GreaterOrEqual,
+    Equal,
+    NotEqual,
+}
+
+public enum BoundUnaryOperator
+{
+    Negate,
+}
+
+/// <summary>A binary operation. The operand type (both sides have the same type) tells Emit which instructions to use.</summary>
+public sealed record BoundBinaryExpression(BoundBinaryOperator Operator, BoundExpression Left, BoundExpression Right, TypeSymbol ResultType)
+    : BoundExpression(ResultType);
+
+public sealed record BoundUnaryExpression(BoundUnaryOperator Operator, BoundExpression Operand)
+    : BoundExpression(Operand.Type);
+
+public sealed record BoundIntLiteral(int Value) : BoundExpression(TypeSymbol.IntType);
+
+public sealed record BoundDoubleLiteral(double Value) : BoundExpression(TypeSymbol.DoubleType);
+
+public sealed record BoundBoolLiteral(bool Value) : BoundExpression(TypeSymbol.BoolType);
+
+/// <summary>Stands in for an expression that had an error; its type is <see cref="TypeSymbol.ErrorType"/>.</summary>
+public sealed record BoundErrorExpression() : BoundExpression(TypeSymbol.ErrorType);

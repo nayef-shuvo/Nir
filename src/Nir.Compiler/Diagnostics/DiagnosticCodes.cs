@@ -24,6 +24,27 @@ public static class DiagnosticCodes
     /// <summary>A call with the wrong number of arguments.</summary>
     public const string WrongArgumentCount = "NIR2004";
 
+    /// <summary>A name declared twice in the same block.</summary>
+    public const string AlreadyDeclared = "NIR2005";
+
+    /// <summary>A type annotation that names no type.</summary>
+    public const string UnknownType = "NIR2006";
+
     /// <summary>A value of one type used where another type is required.</summary>
     public const string TypeMismatch = "NIR3001";
+
+    /// <summary>Assignment to a variable declared without <c>mut</c>.</summary>
+    public const string NotMutable = "NIR3002";
+
+    /// <summary>An operator used with operand types it does not support.</summary>
+    public const string InvalidOperator = "NIR3003";
+
+    /// <summary>A literal whose value does not fit its type.</summary>
+    public const string LiteralOutOfRange = "NIR3004";
+
+    /// <summary>A variable whose initializer has no value, so it would have type <c>()</c>.</summary>
+    public const string UnitVariable = "NIR3005";
+
+    /// <summary>No overload of a function accepts the given argument types.</summary>
+    public const string NoMatchingOverload = "NIR3006";
 }

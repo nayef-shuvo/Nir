@@ -1,0 +1,10 @@
+fn main() {
+    let a: int = 1
+    let b: double = 2.5
+    let c: bool = true
+    let d: string = "text"
+    print(a)
+    print(b)
+    print(c)
+    print(d)
+}

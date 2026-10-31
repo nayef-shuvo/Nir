@@ -19,6 +19,8 @@ internal static class RuntimeConfigWriter
             {
                 tfm = $"net{major}.{minor}",
                 framework = new { name = "Microsoft.NETCore.App", version = $"{major}.{minor}.0" },
+                // Numbers must print the same on every machine ("2.5", never "2,5").
+                configProperties = new Dictionary<string, bool> { ["System.Globalization.Invariant"] = true },
             },
         };
 

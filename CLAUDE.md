@@ -17,9 +17,11 @@ directly. It is also a learning project. Repo: `/mnt/Codes/Project/Nir2`. The pr
 Update this block whenever a task is completed.
 
 - Slice 1 (hello world): **done** (T1.0 to T1.9, 83 tests green, committed on `main`).
-- Next: **slice 2 (bindings and arithmetic)**. Its four decisions are answered (design.md section 1, decisions.md
-  D-030 to D-034). It has no task list yet: write tasks `T2.0`... in `docs/roadmap.md` in the format of slice 1, then
-  start. Open for slice 5: whether nested blocks may redeclare outer names (design.md "Scopes").
+- Slice 2 (bindings and arithmetic): **done** (T2.0 to T2.4, 203 tests green).
+- Next: **slice 3 (functions with parameters and results)**. It has no task list yet: first ask the user the one
+  decision listed in its roadmap section (how to check "all code paths return"), then write tasks `T3.0`... in
+  `docs/roadmap.md` in the format of slices 1 and 2, then start. Open for slice 5: whether nested blocks may redeclare
+  outer names (design.md "Scopes").
 
 ## How to pick up work
 

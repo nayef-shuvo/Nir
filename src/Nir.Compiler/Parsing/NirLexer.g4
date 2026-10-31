@@ -10,7 +10,25 @@ options {
 
 // Keywords must precede IDENTIFIER: ANTLR breaks same-length-match ties by rule order.
 FN: 'fn';
+LET: 'let';
+MUT: 'mut';
+TRUE: 'true';
+FALSE: 'false';
 
+EQEQ: '==';
+NEQ: '!=';
+LE: '<=';
+GE: '>=';
+LT: '<';
+GT: '>';
+PLUS: '+';
+MINUS: '-';
+STAR: '*';
+SLASH: '/';
+PERCENT: '%';
+
+COLON: ':';
+EQ: '=';
 COMMA: ',';
 LBRACE: '{';
 RBRACE: '}';
@@ -26,12 +44,16 @@ SEMI: ';';
 // normal top-level meaning.
 STRING_START: '"' -> pushMode(PLAIN_STRING);
 
+DOUBLE_LITERAL: DIGIT+ '.' DIGIT+;
+INT_LITERAL: DIGIT+;
+
 IDENTIFIER: ID_START ID_CONTINUE*;
 
 WS: [ \t]+ -> skip;
 NEWLINE: ('\r'? '\n')+;
 LINE_COMMENT: '//' ~[\r\n]* -> skip; // Nir has no block comments
 
+fragment DIGIT: [0-9];
 fragment ID_START: [a-zA-Z_];
 fragment ID_CONTINUE: [a-zA-Z0-9_];
 fragment ESCAPE: '\\' .;

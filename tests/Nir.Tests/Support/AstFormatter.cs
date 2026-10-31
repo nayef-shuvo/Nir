@@ -32,6 +32,15 @@ internal static class AstFormatter
         ExpressionStatement => "ExpressionStatement",
         CallExpression c => $"CallExpression {c.Callee.Text}",
         StringLiteralExpression s => $"StringLiteral \"{s.Value}\"",
+        IntLiteralExpression i => $"IntLiteral {i.Text}",
+        DoubleLiteralExpression d => $"DoubleLiteral {d.Text}",
+        BoolLiteralExpression b => $"BoolLiteral {(b.Value ? "true" : "false")}",
+        VariableDeclaration d => $"VariableDeclaration let {(d.IsMutable ? "mut " : string.Empty)}{d.Name.Text}{(d.DeclaredType is { } t ? ": " + t.Text : string.Empty)}",
+        AssignmentStatement a => $"Assignment {a.Target.Text}",
+        NameExpression n => $"Name {n.Name.Text}",
+        BinaryExpression b => $"Binary {OperatorText.Of(b.Operator)}",
+        UnaryExpression u => $"Unary {OperatorText.Of(u.Operator)}",
+        ParenthesizedExpression => "Parenthesized",
         _ => throw new UnreachableException(),
     };
 
@@ -42,7 +51,13 @@ internal static class AstFormatter
         Block b => b.Statements,
         ExpressionStatement s => [s.Expression],
         CallExpression c => c.Arguments,
-        StringLiteralExpression => [],
+        VariableDeclaration d => [d.Initializer],
+        AssignmentStatement a => [a.Value],
+        NameExpression => [],
+        BinaryExpression b => [b.Left, b.Right],
+        UnaryExpression u => [u.Operand],
+        ParenthesizedExpression p => [p.Inner],
+        StringLiteralExpression or IntLiteralExpression or DoubleLiteralExpression or BoolLiteralExpression => [],
         _ => throw new UnreachableException(),
     };
 }

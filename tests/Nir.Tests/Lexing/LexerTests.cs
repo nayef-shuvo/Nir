@@ -139,4 +139,96 @@ public class LexerTests
         Assert.Equal("unexpected character '@'", diagnostic.Message);
         Assert.Equal((1, 3), diagnostic.Source.GetLineAndColumn(diagnostic.Span.Start));
     }
+
+    [Fact]
+    public void Int_literal()
+    {
+        Assert.Equal(["INT_LITERAL '10'", "SEMI ''", "EOF"], TokenFormatter.Lex("10").Tokens);
+    }
+
+    [Fact]
+    public void Double_literal()
+    {
+        Assert.Equal(["DOUBLE_LITERAL '2.5'", "SEMI ''", "EOF"], TokenFormatter.Lex("2.5").Tokens);
+    }
+
+    [Fact]
+    public void Digits_then_dot_without_digit_is_not_a_double()
+    {
+        var (tokens, diagnostics) = TokenFormatter.Lex("1.");
+
+        Assert.Equal(["INT_LITERAL '1'", "SEMI ''", "EOF"], tokens);
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(DiagnosticCodes.UnexpectedCharacter, diagnostic.Code);
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("1.5")]
+    [InlineData("true")]
+    [InlineData("false")]
+    public void Newline_after_literal_becomes_semicolon(string literal)
+    {
+        Assert.EndsWith("SEMI IDENTIFIER SEMI EOF", TokenFormatter.Names(literal + "\nx"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void True_and_false_are_keywords()
+    {
+        Assert.Equal("TRUE FALSE IDENTIFIER SEMI EOF", TokenFormatter.Names("true false truest"));
+    }
+
+    [Fact]
+    public void Operators()
+    {
+        Assert.Equal(
+            "INT_LITERAL PLUS INT_LITERAL MINUS INT_LITERAL STAR INT_LITERAL SLASH INT_LITERAL PERCENT INT_LITERAL SEMI EOF",
+            TokenFormatter.Names("1 + 2 - 3 * 4 / 5 % 6"));
+    }
+
+    [Fact]
+    public void Comparison_operators_prefer_the_longest_match()
+    {
+        Assert.Equal(
+            "IDENTIFIER LE IDENTIFIER GE IDENTIFIER EQEQ IDENTIFIER NEQ IDENTIFIER LT IDENTIFIER GT IDENTIFIER SEMI EOF",
+            TokenFormatter.Names("a <= b >= c == d != e < f > g"));
+    }
+
+    [Fact]
+    public void Newline_after_operator_is_dropped()
+    {
+        Assert.Equal("INT_LITERAL PLUS INT_LITERAL SEMI EOF", TokenFormatter.Names("1 +\n2"));
+    }
+
+    [Fact]
+    public void Newline_before_operator_ends_the_statement()
+    {
+        Assert.Equal("INT_LITERAL SEMI PLUS INT_LITERAL SEMI EOF", TokenFormatter.Names("1\n+ 2"));
+    }
+
+    [Fact]
+    public void Variable_declaration_tokens()
+    {
+        Assert.Equal(
+            "LET MUT IDENTIFIER COLON IDENTIFIER EQ INT_LITERAL SEMI EOF",
+            TokenFormatter.Names("let mut x: int = 1"));
+    }
+
+    [Fact]
+    public void Assignment_and_equality_are_different_tokens()
+    {
+        Assert.Equal("IDENTIFIER EQ IDENTIFIER EQEQ IDENTIFIER SEMI EOF", TokenFormatter.Names("x = y == z"));
+    }
+
+    [Fact]
+    public void Newline_after_equals_is_dropped()
+    {
+        Assert.Equal("LET IDENTIFIER EQ INT_LITERAL SEMI EOF", TokenFormatter.Names("let x =\n1"));
+    }
+
+    [Fact]
+    public void Keyword_prefix_is_still_an_identifier()
+    {
+        Assert.Equal("IDENTIFIER IDENTIFIER SEMI EOF", TokenFormatter.Names("letter muted"));
+    }
 }
