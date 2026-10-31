@@ -1,0 +1,8 @@
+fn greet(name: string) -> string {
+    return "Hello, " + name + "!"
+}
+
+fn main() {
+    print(greet("Nir"))
+    print("a" + "b" + "c" + "d" + "e")
+}

@@ -75,11 +75,11 @@ public class EmitterTests
     }
 
     [Fact]
-    public void Backslashes_in_strings_are_printed_as_written()
+    public void Escapes_in_strings_are_decoded()
     {
         var (stdout, _, _) = TestHost.Run("fn main() {\n    print(\"a\\nb\")\n}");
 
-        Assert.Equal("a\\nb\n", stdout);
+        Assert.Equal("a\nb\n", stdout);
     }
 
     [Fact]

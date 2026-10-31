@@ -1,0 +1,6 @@
+fn main() {
+    let n = 3
+    print(-2.7 as int)
+    print(n as double * 2.0 + 1.0)
+    print(n * n as int)
+}

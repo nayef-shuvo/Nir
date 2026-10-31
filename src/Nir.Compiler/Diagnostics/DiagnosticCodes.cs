@@ -6,6 +6,9 @@ public static class DiagnosticCodes
     /// <summary>A character that cannot start any token.</summary>
     public const string UnexpectedCharacter = "NIR0001";
 
+    /// <summary>A backslash in a string followed by a character that is not an escape.</summary>
+    public const string UnknownEscape = "NIR0003";
+
     /// <summary>A string literal reached a newline or the end of the file before its closing quote.</summary>
     public const string UnterminatedString = "NIR0002";
 
@@ -71,6 +74,9 @@ public static class DiagnosticCodes
 
     /// <summary><c>break</c> or <c>continue</c> outside a loop.</summary>
     public const string JumpOutsideLoop = "NIR3010";
+
+    /// <summary>A value of type <c>()</c> used inside <c>{ }</c> of an interpolated string.</summary>
+    public const string UnitInInterpolation = "NIR3012";
 
     /// <summary>A .NET method whose return type Nir cannot use yet.</summary>
     public const string UnsupportedClrType = "NIR3011";

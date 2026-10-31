@@ -1,5 +1,7 @@
 lexer grammar NirLexer;
 
+tokens { HOLE_END }
+
 options {
     // Statement-terminator inference from newlines and lexical error reporting
     // are hand-written C#, not grammar-expressible -- see NirLexerBase.
@@ -21,6 +23,7 @@ FOR: 'for';
 IN: 'in';
 BREAK: 'break';
 CONTINUE: 'continue';
+AS: 'as';
 TRUE: 'true';
 FALSE: 'false';
 
@@ -60,6 +63,7 @@ SEMI: ';';
 // Entering a string switches lexer mode so `"` is read as text, not as its
 // normal top-level meaning.
 STRING_START: '"' -> pushMode(PLAIN_STRING);
+INTERP_STRING_START: '$"' -> pushMode(INTERP_STRING);
 
 DOUBLE_LITERAL: DIGIT+ '.' DIGIT+;
 INT_LITERAL: DIGIT+;
@@ -85,3 +89,15 @@ STRING_END: '"' -> popMode;
 // A newline before the closing quote. NirLexerBase reports the error and turns
 // this token into a STRING_END so the parser still sees a well-formed string.
 UNTERMINATED_STRING: '\r'? '\n' -> popMode;
+
+// ===================== Interpolated string: $"text {expression} text" ======
+// The text between the holes is lexed here. A `{` opens a hole and goes back to the default mode, so the expression
+// inside is lexed with the ordinary tokens. NirLexerBase counts braces to find the `}` that closes the hole, retypes
+// it HOLE_END and pops back to this mode. Escapes are kept raw, as in plain strings; `{{` and `}}` are literal braces.
+
+mode INTERP_STRING;
+INTERP_TEXT: (ESCAPE | '{{' | '}}' | ~["{}\\\r\n])+;
+HOLE_START: '{' -> pushMode(DEFAULT_MODE);
+INTERP_STRING_END: '"' -> popMode;
+// A newline before the closing quote; NirLexerBase reports it and turns it into INTERP_STRING_END.
+INTERP_UNTERMINATED: '\r'? '\n' -> popMode;

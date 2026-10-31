@@ -112,6 +112,7 @@ assignmentStatement
 expression
     : receiver=expression DOT method=IDENTIFIER LPAREN argumentList? RPAREN  # memberCallExpression
     | op=(MINUS | BANG) operand=expression                              # unaryExpression
+    | operand=expression AS targetType=IDENTIFIER                       # castExpression
     | left=expression op=(STAR | SLASH | PERCENT) right=expression      # multiplicativeExpression
     | left=expression op=(PLUS | MINUS) right=expression                # additiveExpression
     | left=expression op=(LT | LE | GT | GE) right=expression           # relationalExpression
@@ -121,6 +122,7 @@ expression
     | callExpression                                                    # callExpr
     | LPAREN inner=expression RPAREN                                    # parenthesizedExpression
     | stringLiteral                                                     # stringExpr
+    | interpolatedString                                                # interpolatedStringExpr
     | INT_LITERAL                                                       # intExpr
     | DOUBLE_LITERAL                                                    # doubleExpr
     | TRUE                                                              # trueExpr
@@ -139,4 +141,14 @@ argumentList
 
 stringLiteral
     : STRING_START STRING_TEXT? STRING_END
+    ;
+
+// $"text {expression} text". The lexer turns the braces that open and close a hole into HOLE_START and HOLE_END.
+interpolatedString
+    : INTERP_STRING_START interpolatedPart* INTERP_STRING_END
+    ;
+
+interpolatedPart
+    : INTERP_TEXT                       # interpolatedText
+    | HOLE_START expression HOLE_END    # interpolatedHole
     ;

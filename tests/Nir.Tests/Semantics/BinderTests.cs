@@ -179,8 +179,8 @@ public class BinderTests
     [InlineData("1.5 * 2")]
     [InlineData("true + false")]
     [InlineData("true < false")]
-    [InlineData("\"a\" + \"b\"")]
-    [InlineData("\"a\" == \"b\"")]
+    [InlineData("\"a\" - \"b\"")]
+    [InlineData("\"a\" < \"b\"")]
     [InlineData("1 == 1.0")]
     [InlineData("1 < true")]
     public void Invalid_operand_types_report_NIR3003(string expression)

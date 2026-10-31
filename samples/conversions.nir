@@ -1,0 +1,11 @@
+// Converting between int and double with `as`.
+fn main() {
+    let total = 17
+    let count = 4
+    let average = (total as double) / (count as double)
+
+    print(average)                          // 4.25
+    print(average as int)                   // 4: the fraction is cut off
+    print(-average as int)                  // -4: toward zero, not rounded down
+    print($"{total} / {count} = {average}")
+}

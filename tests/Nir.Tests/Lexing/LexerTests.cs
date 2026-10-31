@@ -329,5 +329,141 @@ public class LexerTests
     {
         Assert.Equal("RBRACE SEMI ELSE LBRACE RBRACE SEMI EOF", TokenFormatter.Names("}\nelse {\n}"));
     }
+
+    [Fact]
+    public void Interpolated_string_without_holes()
+    {
+        Assert.Equal("INTERP_STRING_START INTERP_TEXT INTERP_STRING_END SEMI EOF", TokenFormatter.Names("$\"hi\""));
+        Assert.Equal("INTERP_STRING_START INTERP_STRING_END SEMI EOF", TokenFormatter.Names("$\"\""));
+    }
+
+    [Fact]
+    public void Interpolated_string_with_holes()
+    {
+        Assert.Equal(
+            "INTERP_STRING_START INTERP_TEXT HOLE_START IDENTIFIER HOLE_END INTERP_TEXT INTERP_STRING_END SEMI EOF",
+            TokenFormatter.Names("$\"a {x} b\""));
+        Assert.Equal("INTERP_STRING_START HOLE_START IDENTIFIER HOLE_END INTERP_STRING_END SEMI EOF", TokenFormatter.Names("$\"{x}\""));
+        Assert.Equal(
+            "INTERP_STRING_START HOLE_START IDENTIFIER HOLE_END HOLE_START IDENTIFIER HOLE_END INTERP_STRING_END SEMI EOF",
+            TokenFormatter.Names("$\"{a}{b}\""));
+    }
+
+    [Fact]
+    public void Doubled_braces_are_text()
+    {
+        Assert.Equal(
+            ["INTERP_STRING_START '$\"'", "INTERP_TEXT '{{x}}'", "INTERP_STRING_END '\"'", "SEMI ''", "EOF"],
+            TokenFormatter.Lex("$\"{{x}}\"").Tokens);
+    }
+
+    [Fact]
+    public void A_hole_holds_ordinary_tokens()
+    {
+        Assert.Equal(
+            "INTERP_STRING_START HOLE_START INT_LITERAL PLUS IDENTIFIER LPAREN INT_LITERAL RPAREN HOLE_END INTERP_STRING_END SEMI EOF",
+            TokenFormatter.Names("$\"{1 + f(2)}\""));
+    }
+
+    [Fact]
+    public void A_string_can_be_inside_a_hole()
+    {
+        Assert.Equal(
+            "INTERP_STRING_START HOLE_START IDENTIFIER LPAREN STRING_START STRING_TEXT STRING_END RPAREN HOLE_END INTERP_STRING_END SEMI EOF",
+            TokenFormatter.Names("$\"{f(\"a\")}\""));
+    }
+
+    [Fact]
+    public void An_interpolated_string_can_be_inside_a_hole()
+    {
+        Assert.Equal(
+            "INTERP_STRING_START HOLE_START INTERP_STRING_START HOLE_START IDENTIFIER HOLE_END INTERP_STRING_END HOLE_END INTERP_STRING_END SEMI EOF",
+            TokenFormatter.Names("$\"{$\"{x}\"}\""));
+    }
+
+    [Fact]
+    public void Braces_inside_a_hole_are_counted_so_the_right_one_closes_it()
+    {
+        Assert.Equal(
+            "INTERP_STRING_START HOLE_START LBRACE RBRACE HOLE_END INTERP_TEXT INTERP_STRING_END SEMI EOF",
+            TokenFormatter.Names("$\"{ { } }tail\""));
+    }
+
+    [Fact]
+    public void Text_resumes_after_a_hole()
+    {
+        Assert.Equal(
+            ["INTERP_STRING_START '$\"'", "HOLE_START '{'", "IDENTIFIER 'x'", "HOLE_END '}'", "INTERP_TEXT 'tail'", "INTERP_STRING_END '\"'", "SEMI ''", "EOF"],
+            TokenFormatter.Lex("$\"{x}tail\"").Tokens);
+    }
+
+    [Fact]
+    public void A_newline_inside_a_hole_is_whitespace()
+    {
+        Assert.Equal(
+            "INTERP_STRING_START HOLE_START IDENTIFIER PLUS IDENTIFIER HOLE_END INTERP_STRING_END SEMI EOF",
+            TokenFormatter.Names("$\"{x +\n y}\""));
+        Assert.Equal(
+            "INTERP_STRING_START HOLE_START IDENTIFIER HOLE_END INTERP_STRING_END SEMI EOF",
+            TokenFormatter.Names("$\"{x\n}\""));
+    }
+
+    [Fact]
+    public void Newline_after_an_interpolated_string_ends_the_statement()
+    {
+        Assert.Equal("INTERP_STRING_START INTERP_STRING_END SEMI IDENTIFIER SEMI EOF", TokenFormatter.Names("$\"\"\nx"));
+    }
+
+    [Fact]
+    public void Braces_in_a_plain_string_are_just_text()
+    {
+        Assert.Equal("STRING_START STRING_TEXT STRING_END SEMI EOF", TokenFormatter.Names("\"{x} {{y}}\""));
+    }
+
+    [Fact]
+    public void An_escaped_quote_does_not_end_an_interpolated_string()
+    {
+        Assert.Equal("INTERP_STRING_START INTERP_TEXT INTERP_STRING_END SEMI EOF", TokenFormatter.Names("$\"a\\\"b\""));
+    }
+
+    [Theory]
+    [InlineData("$\"abc\nx")]
+    [InlineData("$\"abc")]
+    [InlineData("$\"a {x")]
+    public void Unterminated_interpolated_strings_report_NIR0002_once_at_the_opening(string source)
+    {
+        var (_, diagnostics) = TokenFormatter.Lex(source);
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(DiagnosticCodes.UnterminatedString, diagnostic.Code);
+        Assert.Equal((1, 1), diagnostic.Source.GetLineAndColumn(diagnostic.Span.Start));
+    }
+
+    [Fact]
+    public void A_plain_string_cut_short_inside_a_hole_also_leaves_the_outer_string_open()
+    {
+        // Both are reported by the lexer; the parser keeps only the earliest (the outer one).
+        var (_, diagnostics) = TokenFormatter.Lex("$\"a {f(\"b\n");
+
+        Assert.Equal(2, diagnostics.Count);
+        Assert.All(diagnostics, d => Assert.Equal(DiagnosticCodes.UnterminatedString, d.Code));
+    }
+
+    [Fact]
+    public void A_lone_dollar_sign_is_an_unexpected_character()
+    {
+        var (_, diagnostics) = TokenFormatter.Lex("a $ b");
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(DiagnosticCodes.UnexpectedCharacter, diagnostic.Code);
+        Assert.Equal("unexpected character '$'", diagnostic.Message);
+    }
+
+    [Fact]
+    public void As_is_a_keyword()
+    {
+        Assert.Equal("IDENTIFIER AS IDENTIFIER SEMI EOF", TokenFormatter.Names("x as int"));
+        Assert.Equal("IDENTIFIER IDENTIFIER SEMI EOF", TokenFormatter.Names("assert ascii"));
+    }
 }
 

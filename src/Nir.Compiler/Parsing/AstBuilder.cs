@@ -10,7 +10,7 @@ namespace Nir.Compiler.Parsing;
 /// Converts an ANTLR parse tree into our own syntax tree. This is the only place that reads ANTLR contexts.
 /// After a syntax error the parse tree can have missing parts; those are skipped instead of throwing.
 /// </summary>
-internal sealed class AstBuilder(SourceText source)
+internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
 {
     public CompilationUnit Build(NirParser.CompilationUnitContext context)
     {
@@ -199,6 +199,8 @@ internal sealed class AstBuilder(SourceText source)
         NirParser.CallExprContext c => c.callExpression() is { } call ? BuildCall(call) : null,
         NirParser.ParenthesizedExpressionContext p => BuildExpression(p.inner) is { } inner ? new ParenthesizedExpression(inner, SpanOf(p)) : null,
         NirParser.StringExprContext s => s.stringLiteral() is { } literal ? BuildStringLiteral(literal) : null,
+        NirParser.InterpolatedStringExprContext i => i.interpolatedString() is { } interpolated ? BuildInterpolated(interpolated) : null,
+        NirParser.CastExpressionContext c => BuildCast(c),
         NirParser.IntExprContext i => new IntLiteralExpression(i.INT_LITERAL().GetText(), SpanOf(i)),
         NirParser.DoubleExprContext d => new DoubleLiteralExpression(d.DOUBLE_LITERAL().GetText(), SpanOf(d)),
         NirParser.TrueExprContext t => new BoolLiteralExpression(true, SpanOf(t)),
@@ -272,8 +274,54 @@ internal sealed class AstBuilder(SourceText source)
         return new CallExpression(callee, BuildArguments(context.argumentList()), SpanOf(context));
     }
 
-    private static StringLiteralExpression BuildStringLiteral(NirParser.StringLiteralContext context) =>
-        new(context.STRING_TEXT()?.GetText() ?? string.Empty, SpanOf(context));
+    private StringLiteralExpression BuildStringLiteral(NirParser.StringLiteralContext context)
+    {
+        var text = context.STRING_TEXT()?.Symbol;
+        return new StringLiteralExpression(Decode(text, interpolated: false), SpanOf(context));
+    }
+
+    private InterpolatedStringExpression BuildInterpolated(NirParser.InterpolatedStringContext context)
+    {
+        var parts = ImmutableArray.CreateBuilder<InterpolatedStringPart>();
+        foreach (var part in context.interpolatedPart())
+        {
+            switch (part)
+            {
+                case NirParser.InterpolatedTextContext text when text.INTERP_TEXT()?.Symbol is { } token:
+                    parts.Add(new InterpolatedText(Decode(token, interpolated: true), SpanOf(token)));
+                    break;
+                case NirParser.InterpolatedHoleContext hole when BuildExpression(hole.expression()) is { } expression:
+                    parts.Add(new InterpolatedHole(expression, SpanOf(hole)));
+                    break;
+            }
+        }
+
+        return new InterpolatedStringExpression(parts.ToImmutable(), SpanOf(context));
+    }
+
+    private CastExpression? BuildCast(NirParser.CastExpressionContext context)
+    {
+        var operand = BuildExpression(context.operand);
+        var target = BuildIdentifier(context.targetType);
+        return operand is null || target is null ? null : new CastExpression(operand, target, SpanOf(context));
+    }
+
+    // Decodes the escapes of a text token, reporting each unknown one at its place in the source.
+    private string Decode(IToken? token, bool interpolated)
+    {
+        if (token is null || IsMissing(token))
+        {
+            return string.Empty;
+        }
+
+        return StringEscapes.Decode(token.Text, interpolated, (offset, length, text) =>
+            diagnostics.Report(
+                DiagnosticCodes.UnknownEscape,
+                Severity.Error,
+                $"unknown escape sequence '{text}'",
+                source,
+                new TextSpan(token.StartIndex + offset, length)));
+    }
 
     private static Identifier? BuildIdentifier(IToken? token) =>
         IsMissing(token)

@@ -334,11 +334,90 @@ public static class Binder
             CallExpression c => BindCall(c),
             MemberCallExpression m => BindMemberCall(m),
             NameExpression n => BindName(n),
+            InterpolatedStringExpression i => BindInterpolated(i),
+            CastExpression c => BindCast(c),
             ParenthesizedExpression p => BindExpression(p.Inner),
             UnaryExpression u => BindUnary(u),
             BinaryExpression b => BindBinary(b),
             _ => throw new UnreachableException(),
         };
+
+        // Every part becomes a string: text stays a literal, and a value of another type is wrapped in its own ToString().
+        private BoundExpression BindInterpolated(InterpolatedStringExpression interpolated)
+        {
+            var parts = ImmutableArray.CreateBuilder<BoundExpression>();
+            var failed = false;
+
+            foreach (var part in interpolated.Parts)
+            {
+                switch (part)
+                {
+                    case InterpolatedText { Text.Length: > 0 } text:
+                        parts.Add(new BoundStringLiteral(text.Text));
+                        break;
+
+                    case InterpolatedHole hole:
+                        var value = BindExpression(hole.Expression);
+                        if (value.Type == TypeSymbol.ErrorType)
+                        {
+                            failed = true;
+                        }
+                        else if (value.Type == TypeSymbol.UnitType)
+                        {
+                            Error(DiagnosticCodes.UnitInInterpolation, "cannot use a value of type '()' in an interpolated string", hole.Expression.Span);
+                            failed = true;
+                        }
+                        else
+                        {
+                            parts.Add(ToStringPart(value));
+                        }
+
+                        break;
+                }
+            }
+
+            return failed ? new BoundErrorExpression() : new BoundInterpolatedString(parts.ToImmutable());
+        }
+
+        private static BoundExpression ToStringPart(BoundExpression value)
+        {
+            if (value.Type == TypeSymbol.StringType)
+            {
+                return value;
+            }
+
+            // int, double and bool all have ToString() with no parameters that returns a string.
+            var toString = ClrMethods.FindCandidates(value.Type.ClrType, "ToString", isStatic: false)
+                .First(c => c.ParameterTypes.Length == 0 && c.ReturnType == TypeSymbol.StringType);
+            return new BoundMemberCallExpression(value, new ClrMethodSymbol("ToString", toString.Method, TypeSymbol.StringType, []), []);
+        }
+
+        // `x as T` converts between int and double only (design.md "Strings and conversions").
+        private BoundExpression BindCast(CastExpression cast)
+        {
+            var operand = BindExpression(cast.Operand);
+            var target = LookupType(cast.TargetType.Text);
+            if (target is null)
+            {
+                Error(DiagnosticCodes.UnknownType, $"unknown type '{cast.TargetType.Text}'", cast.TargetType.Span);
+                return new BoundErrorExpression();
+            }
+
+            if (operand.Type == TypeSymbol.ErrorType)
+            {
+                return operand;
+            }
+
+            if (!IsNumber(operand.Type) || !IsNumber(target))
+            {
+                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{operand.Type}' to '{target}'", cast.Span);
+                return new BoundErrorExpression();
+            }
+
+            return operand.Type == target ? operand : new BoundConversion(operand, target);
+        }
+
+        private static bool IsNumber(TypeSymbol type) => type == TypeSymbol.IntType || type == TypeSymbol.DoubleType;
 
         private BoundExpression BindName(NameExpression name)
         {
@@ -405,15 +484,17 @@ public static class Binder
                 return null;
             }
 
-            var isNumber = left == TypeSymbol.IntType || left == TypeSymbol.DoubleType;
+            var isNumber = IsNumber(left);
+            var isString = left == TypeSymbol.StringType;
             return op switch
             {
-                BinaryOperator.Add or BinaryOperator.Subtract or BinaryOperator.Multiply or BinaryOperator.Divide or BinaryOperator.Remainder
+                BinaryOperator.Add => isNumber || isString ? left : null,
+                BinaryOperator.Subtract or BinaryOperator.Multiply or BinaryOperator.Divide or BinaryOperator.Remainder
                     => isNumber ? left : null,
                 BinaryOperator.Less or BinaryOperator.LessOrEqual or BinaryOperator.Greater or BinaryOperator.GreaterOrEqual
                     => isNumber ? TypeSymbol.BoolType : null,
                 BinaryOperator.Equal or BinaryOperator.NotEqual
-                    => isNumber || left == TypeSymbol.BoolType ? TypeSymbol.BoolType : null,
+                    => isNumber || isString || left == TypeSymbol.BoolType ? TypeSymbol.BoolType : null,
                 BinaryOperator.And or BinaryOperator.Or
                     => left == TypeSymbol.BoolType ? TypeSymbol.BoolType : null,
                 _ => throw new UnreachableException(),

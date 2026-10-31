@@ -1,0 +1,5 @@
+// Expect: NIR3012 "cannot use a value of type '()' in an interpolated string" on line 4, under the call.
+// `print` returns nothing, so there is no value to put in the text.
+fn main() {
+    print($"result: {print(1)}")
+}

@@ -1,0 +1,7 @@
+fn main() {
+    print(5 as double)
+    print((7 as double) / 2.0)
+    print(7.9 as int)
+    print(-7.9 as int)
+    print(2.5 as int as double)
+}

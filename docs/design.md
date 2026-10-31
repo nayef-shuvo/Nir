@@ -74,7 +74,7 @@ fn main() {
 ### Numbers [locked]
 
 - Primitive types: `int` (32-bit), `double`, `bool`, `string`. There is no `float` for now.
-- No implicit conversions between numeric types. `1 + 2.5` is an error. The conversion syntax is decided with slice 6 (strings and conversions).
+- No implicit conversions between numeric types. `1 + 2.5` is an error. Conversions are written with `as` (see "Strings and conversions").
 - Integer arithmetic overflow throws, so `2147483647 + 1` crashes with an `OverflowException`. A build flag to switch to
   wrapping arithmetic may come later. Integer division by zero also crashes (CLR behavior), like any unrecoverable failure.
 
@@ -119,6 +119,36 @@ fn main() {
   decides the result. Precedence, highest first: unary `-` and `!`, then `* / %`, `+ -`, `< <= > >=`, `== !=`, `&&`, `||`.
 - "Every path returns": a function that returns a value must end with `return value`, or with an `if` / `else` whose
   branches both end that way (also `else if` chains that end in `else`). A loop never counts, even `while true`.
+
+### Strings and conversions [locked]
+
+```
+fn main() {
+    let name = "Nir"
+    let n = 42
+    let ratio = 7.5
+
+    print("Hello, " + name + "!")                        // Hello, Nir!
+    print($"{name} has n = {n}, ratio = {ratio}")         // Nir has n = 42, ratio = 7.5
+    print($"even: {n % 2 == 0}, shout: {name.ToUpper()}") // even: True, shout: NIR
+    print($"{{braces}} and {n}")                          // {braces} and 42
+    print("tab:\there, quote: \", backslash: \\")        // tab:<TAB>here, quote: ", backslash: \
+    print("a" == "a")                                     // True
+
+    let average = (n as double) / 4.0                     // 10.5
+    let whole = ratio as int                              // 7: the fraction is cut off
+}
+```
+
+- `+` joins two strings. There is no implicit conversion, so `"n = " + 5` is an error; use `$"n = {5}"`.
+- `==` and `!=` compare strings by their characters, exactly (ordinal), not by identity. `<` and `>` on strings are errors.
+- `$"..."` is an interpolated string. Each `{ expression }` can hold any expression of any type except `()`; its text is
+  the value's `ToString()` with invariant culture (`True`, `2.5`, `42`). Write `{{` and `}}` for literal braces. A hole can
+  contain strings, calls and nested interpolated strings.
+- Escapes, in plain and interpolated strings: `\n` `\t` `\r` `\\` `\"` `\{`. Any other backslash sequence is an error.
+- `x as double` and `d as int` convert between `int` and `double` and nothing else. `int` to `double` is exact for every
+  `int`. `double` to `int` cuts off the fraction toward zero and throws (crashes) when the value does not fit or is `NaN`,
+  like the other checked arithmetic. `as` binds tighter than `*` and looser than unary `-`, so `-x as double` is `(-x) as double`.
 
 ## 2. Type declarations [proposed]
 

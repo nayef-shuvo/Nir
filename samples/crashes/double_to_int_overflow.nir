@@ -1,0 +1,5 @@
+// Compiles. Prints 2147483647, then crashes: 2147483648.0 does not fit an int, so `as int` throws System.OverflowException.
+fn main() {
+    print(2147483647.0 as int)
+    print(2147483648.0 as int)
+}

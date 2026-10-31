@@ -1,0 +1,7 @@
+fn main() {
+    print("a\tb")
+    print("line1\nline2")
+    print("say \"hi\"")
+    print("C:\\temp")
+    print("\{ok}")
+}

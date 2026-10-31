@@ -24,7 +24,7 @@ public static class SyntaxParser
         parser.RemoveErrorListeners();
         parser.AddErrorListener(new ParserErrorListener(source, found));
 
-        var unit = new AstBuilder(source).Build(parser.compilationUnit());
+        var unit = new AstBuilder(source, found).Build(parser.compilationUnit());
 
         // The lexer runs a little ahead of the parser, so the order they report in is not quite the order in the file.
         if (found.OrderBy(d => d.Span.Start).FirstOrDefault() is { } first)

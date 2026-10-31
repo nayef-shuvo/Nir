@@ -1001,5 +1001,229 @@ public class ParserTests
         var diagnostic = Assert.Single(diagnostics);
         Assert.Equal(DiagnosticCodes.SyntaxError, diagnostic.Code);
     }
+
+    [Fact]
+    public void Interpolated_string_with_text_and_holes()
+    {
+        Assert.Equal(
+            """
+            Interpolated
+              Text "a "
+              Hole
+                Name x
+              Text " b"
+            """,
+            ExpressionTree("$\"a {x} b\""));
+    }
+
+    [Fact]
+    public void Empty_interpolated_string()
+    {
+        Assert.Equal("Interpolated", ExpressionTree("$\"\""));
+    }
+
+    [Fact]
+    public void Holes_hold_full_expressions()
+    {
+        Assert.Equal(
+            """
+            Interpolated
+              Hole
+                Binary +
+                  Name a
+                  IntLiteral 1
+              Text "-"
+              Hole
+                CallExpression f
+                  StringLiteral "x"
+              Hole
+                MemberCall ToUpper
+                  Name s
+            """,
+            ExpressionTree("$\"{a + 1}-{f(\"x\")}{s.ToUpper()}\""));
+    }
+
+    [Fact]
+    public void Interpolated_strings_nest()
+    {
+        Assert.Equal(
+            """
+            Interpolated
+              Text "["
+              Hole
+                Interpolated
+                  Hole
+                    Name x
+              Text "]"
+            """,
+            ExpressionTree("$\"[{$\"{x}\"}]\""));
+    }
+
+    [Fact]
+    public void Doubled_braces_become_single_braces_in_the_text()
+    {
+        var (unit, diagnostics) = Parse("fn main() { print($\"{{x}} {y}\") }");
+
+        Assert.Empty(diagnostics);
+        var call = (CallExpression)((ExpressionStatement)unit.Functions[0].Body.Statements[0]).Expression;
+        var interpolated = (InterpolatedStringExpression)call.Arguments[0];
+        Assert.Equal("{x} ", ((InterpolatedText)interpolated.Parts[0]).Text);
+        Assert.IsType<InterpolatedHole>(interpolated.Parts[1]);
+    }
+
+    [Fact]
+    public void Escapes_are_decoded_in_plain_and_interpolated_strings()
+    {
+        var (unit, diagnostics) = Parse("fn main() { print(\"a\\tb\\n\", \"say \\\"hi\\\"\", $\"x\\ty\") }");
+
+        Assert.Empty(diagnostics);
+        var call = (CallExpression)((ExpressionStatement)unit.Functions[0].Body.Statements[0]).Expression;
+        Assert.Equal("a\tb\n", ((StringLiteralExpression)call.Arguments[0]).Value);
+        Assert.Equal("say \"hi\"", ((StringLiteralExpression)call.Arguments[1]).Value);
+        Assert.Equal("x\ty", ((InterpolatedText)((InterpolatedStringExpression)call.Arguments[2]).Parts[0]).Text);
+    }
+
+    [Fact]
+    public void Interpolated_string_span_covers_the_dollar_and_both_quotes()
+    {
+        var (unit, _) = Parse("fn main() { print($\"a{x}\") }");
+
+        var call = (CallExpression)((ExpressionStatement)unit.Functions[0].Body.Statements[0]).Expression;
+        Assert.Equal(new TextSpan(18, 7), call.Arguments[0].Span);
+    }
+
+    [Theory]
+    [InlineData("print(\"a\\qb\")", 21)]
+    [InlineData("print($\"a\\qb\")", 22)]
+    public void An_unknown_escape_reports_NIR0003_at_the_backslash(string statement, int column)
+    {
+        var (_, diagnostics) = Parse($"fn main() {{ {statement} }}");
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(DiagnosticCodes.UnknownEscape, diagnostic.Code);
+        Assert.Equal("unknown escape sequence '\\q'", diagnostic.Message);
+        Assert.Equal((1, column), diagnostic.Source.GetLineAndColumn(diagnostic.Span.Start));
+        Assert.Equal(2, diagnostic.Span.Length);
+    }
+
+    [Fact]
+    public void Only_the_first_of_two_unknown_escapes_is_reported()
+    {
+        var (_, diagnostics) = Parse("fn main() { print(\"\\q\\z\") }");
+
+        Assert.Equal("unknown escape sequence '\\q'", Assert.Single(diagnostics).Message);
+    }
+
+    [Fact]
+    public void An_unknown_escape_before_a_syntax_error_wins()
+    {
+        var (_, diagnostics) = Parse("fn main() { print(\"\\q\") }\nfn broken( {");
+
+        Assert.Equal(DiagnosticCodes.UnknownEscape, Assert.Single(diagnostics).Code);
+    }
+
+    [Fact]
+    public void A_nested_string_cut_short_reports_the_outer_string_once()
+    {
+        var (_, diagnostics) = Parse("fn main() {\n    print($\"a {f(\"b\n}");
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(DiagnosticCodes.UnterminatedString, diagnostic.Code);
+        Assert.Equal((2, 11), diagnostic.Source.GetLineAndColumn(diagnostic.Span.Start));
+    }
+
+    [Fact]
+    public void Cast_expression()
+    {
+        Assert.Equal(
+            """
+            Cast double
+              Name x
+            """,
+            ExpressionTree("x as double"));
+    }
+
+    [Fact]
+    public void Unary_minus_binds_tighter_than_as()
+    {
+        Assert.Equal(
+            """
+            Cast double
+              Unary -
+                Name x
+            """,
+            ExpressionTree("-x as double"));
+    }
+
+    [Fact]
+    public void As_binds_tighter_than_addition_and_multiplication()
+    {
+        Assert.Equal(
+            """
+            Binary +
+              Name a
+              Cast double
+                Name b
+            """,
+            ExpressionTree("a + b as double"));
+        Assert.Equal(
+            """
+            Binary *
+              Cast double
+                IntLiteral 1
+              DoubleLiteral 2.0
+            """,
+            ExpressionTree("1 as double * 2.0"));
+    }
+
+    [Fact]
+    public void Casts_chain_to_the_left_and_apply_to_calls()
+    {
+        Assert.Equal(
+            """
+            Cast int
+              Cast double
+                Name x
+            """,
+            ExpressionTree("x as double as int"));
+        Assert.Equal(
+            """
+            Cast int
+              MemberCall F
+                Name x
+            """,
+            ExpressionTree("x.F() as int"));
+    }
+
+    [Fact]
+    public void A_cast_inside_parentheses_and_in_a_comparison()
+    {
+        Assert.Equal(
+            """
+            Binary <
+              Cast double
+                Name n
+              Parenthesized
+                Binary /
+                  DoubleLiteral 1.0
+                  DoubleLiteral 2.0
+            """,
+            ExpressionTree("n as double < (1.0 / 2.0)"));
+    }
+
+    [Theory]
+    [InlineData("fn main() { x as }")]
+    [InlineData("fn main() { x as 5 }")]
+    [InlineData("fn main() { as int }")]
+    [InlineData("fn main() { print($\"{}\") }")]
+    [InlineData("fn main() { print($\"{x\") }")]
+    [InlineData("fn main() { print($\"{x +}\") }")]
+    public void Broken_casts_and_holes_report_one_diagnostic_and_still_return_a_tree(string source)
+    {
+        var (unit, diagnostics) = Parse(source);
+
+        Assert.NotNull(unit);
+        Assert.Single(diagnostics);
+    }
 }
 

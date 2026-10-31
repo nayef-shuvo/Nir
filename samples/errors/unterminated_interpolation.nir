@@ -1,0 +1,4 @@
+// Expect: one NIR0002 "unterminated string literal" at the opening `$"` on line 3.
+fn main() {
+    print($"never closed)
+}

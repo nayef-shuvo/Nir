@@ -78,6 +78,15 @@ public sealed record BoundBinaryExpression(BoundBinaryOperator Operator, BoundEx
 public sealed record BoundUnaryExpression(BoundUnaryOperator Operator, BoundExpression Operand)
     : BoundExpression(Operand.Type);
 
+/// <summary>
+/// An interpolated string. Every part is already a <c>string</c>: text is a literal and a value of another type has been
+/// wrapped in its <c>ToString()</c> call. The parts are joined in order.
+/// </summary>
+public sealed record BoundInterpolatedString(ImmutableArray<BoundExpression> Parts) : BoundExpression(TypeSymbol.StringType);
+
+/// <summary>A conversion between <c>int</c> and <c>double</c> (<c>operand as target</c>).</summary>
+public sealed record BoundConversion(BoundExpression Operand, TypeSymbol Target) : BoundExpression(Target);
+
 public sealed record BoundIntLiteral(int Value) : BoundExpression(TypeSymbol.IntType);
 
 public sealed record BoundDoubleLiteral(double Value) : BoundExpression(TypeSymbol.DoubleType);

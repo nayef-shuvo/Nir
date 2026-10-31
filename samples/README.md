@@ -16,6 +16,8 @@ src/Nir.Cli/bin/Debug/net10.0/nir run samples/arithmetic.nir
 | `hello.nir` | the smallest program |
 | `arithmetic.nir` | `let`, `let mut`, numbers, operators, parentheses |
 | `functions.nir` | parameters, results, calls in any order |
+| `strings.nir` | `+`, `==`, interpolation `$"{x}"`, escapes |
+| `conversions.nir` | `as` between `int` and `double` |
 | `control_flow.nir` | `if` / `else if` / `else`, `while`, `for` with `..` and `..=`, `break`, `continue`, `&&` `||` `!` |
 | `recursion.nir` | factorial, fibonacci, mutual recursion |
 | `dotnet_math.nir` | `using clr::cs::...`, `Math::Sqrt`, `Int32::Parse`, `Console::WriteLine` |

@@ -1,0 +1,7 @@
+fn main() {
+    print("a" == "a")
+    print(("ab" + "c") == ("a" + "bc"))
+    print("a" == "A")
+    print("a" != "b")
+    print("" == "")
+}

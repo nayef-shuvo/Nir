@@ -144,6 +144,7 @@ Codes defined so far (slices 1 to 4):
 |---|---|---|
 | NIR0001 | unexpected character | `unexpected character '{c}'` |
 | NIR0002 | unterminated string literal | `unterminated string literal` |
+| NIR0003 | backslash followed by something that is not an escape | `unknown escape sequence '\q'` |
 | NIR1001 | syntax error (any parser error) | the text from the parser, see section 5 |
 | NIR2001 | name not defined | `'{name}' is not defined` |
 | NIR2002 | missing entry point | `program has no 'main' function` |
@@ -166,6 +167,7 @@ Codes defined so far (slices 1 to 4):
 | NIR3008 | `return value` in a `()` function | `cannot return a value from '{name}' because it returns '()'` |
 | NIR3009 | bare `return` in a value function | `'{name}' must return a value of type '{type}'` |
 | NIR3010 | `break` or `continue` outside a loop | `'{keyword}' can only be used inside a loop` |
+| NIR3012 | value of type `()` inside `{ }` of an interpolated string | `cannot use a value of type '()' in an interpolated string` |
 | NIR3011 | .NET method returns a type Nir cannot use yet | `'{method}' returns '{type}', which Nir cannot use yet` |
 
 ## 5. Parsing (`Nir.Compiler.Parsing`)
@@ -214,21 +216,30 @@ The newline logic was ported from `reference/NirLexerBase.cs`; do not redesign i
 file replaces the old single stashed `EOF`.
 
 **Keywords.** A keyword is added to the lexer grammar in the slice that first uses it. Keywords are listed before
-`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Keywords so far: `fn`, `let`, `mut`, `return`, `using`, `if`, `else`, `while`, `for`, `in`, `break`, `continue`, `true`, `false`. `->` is `ARROW`, `::` is `COLONCOLON`, `.` is `DOT`.
+`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Keywords so far: `fn`, `let`, `mut`, `return`, `using`, `if`, `else`, `while`, `for`, `in`, `break`, `continue`, `as`, `true`, `false`. `->` is `ARROW`, `::` is `COLONCOLON`, `.` is `DOT`.
 A `using` line is `USING importPath`, and the compilation unit is a list of `topLevelItem`s (a `using` or a function), so
 imports may appear anywhere at the top level. A call target is a `qualifiedName`; a method call on a value is the
 highest-precedence expression alternative (`receiver.Method(args)`). A line cannot start with `.` to continue the previous
 line: the newline already ended the statement.
 
-**Strings.** Plain strings use lexer modes: `STRING_START`, `STRING_TEXT`, `STRING_END`. The lexer keeps raw text;
-escape sequences are decoded by `AstBuilder` (from slice 5). In slice 1 a `StringLiteralExpression.Value` is the raw text
-between the quotes. A backslash and the next character are consumed together (so `\"` does not end the string) but are
-kept undecoded.
+**Strings.** Plain strings use lexer modes: `STRING_START`, `STRING_TEXT`, `STRING_END`. The lexer keeps the raw text; a
+backslash and the next character are consumed together (so `\"` does not end the string) and `AstBuilder` decodes them
+with `StringEscapes.Decode`: `\n \t \r \\ \" \{`, and an unknown one is `NIR0003` at the backslash. So
+`StringLiteralExpression.Value` and `InterpolatedText.Text` hold the decoded text.
 
-A newline or the end of the file inside a string reports `NIR0002` once, at the opening quote. The lexer then repairs
-the token stream (turns the newline, or a synthesized token at end of file, into a `STRING_END`) so the parser sees a
-complete string and does not add errors about it. Note the newline is consumed by the string, so a later syntax error
-about a missing `)` can still follow.
+**Interpolated strings** (`$"text {expression} text"`) use a second mode, `INTERP_STRING`, for the text between holes:
+`INTERP_STRING_START`, `INTERP_TEXT` (which may contain `{{` and `}}`), `HOLE_START`, `HOLE_END`, `INTERP_STRING_END`. The
+hole itself is lexed in the default mode, so it can contain any expression, strings and nested interpolated strings. The
+`{` in `INTERP_STRING` is `HOLE_START` and pushes the default mode. `NirLexerBase` finds the `}` that closes the hole by
+counting: a stack of brace counters, one per open hole, goes up for each `{` and down for each `}` inside the hole, and a
+`}` at zero is retyped `HOLE_END` and calls `PopMode()`. A hole also counts as brackets for the newline rule. The parser
+rule is `interpolatedString : INTERP_STRING_START interpolatedPart* INTERP_STRING_END` with parts `INTERP_TEXT` or
+`HOLE_START expression HOLE_END`.
+
+A newline or the end of the file inside a string (plain or interpolated) reports `NIR0002` once, at the opening quote
+(at the outermost open string when the file ends). The lexer keeps a stack of open strings and repairs the token stream
+(turns the newline, or a synthesized token at end of file, into the matching end token) so the parser sees a complete
+string and does not add errors about it. The parser still reports only the earliest problem of the file.
 
 **Error messages.** `ParserErrorListener` reports every ANTLR syntax error as `NIR1001` with ANTLR's message text rewritten in
 plain words (`Friendly`: token names such as `INT_LITERAL` become `a number`, repeats in the expected set are removed,
@@ -269,6 +280,10 @@ unary `-`, then `* / %`, `+ -`, `< <= > >=`, `== !=`, all left-associative.
 Slice 3 adds: `Parameter(Name, Type)` and `ReturnStatement(Value?)`, and `FunctionDeclaration` now has
 `Parameters` and an optional `ReturnType` (null means the function returns `()`). Types are plain identifiers;
 the binder decides which names are types.
+
+Slice 6 adds `InterpolatedStringExpression(Parts)` with `InterpolatedText(Text)` and `InterpolatedHole(Expression)` parts, and
+`CastExpression(Operand, TargetType)` for `x as T`. The cast sits in the expression ladder just below unary `-` / `!` and above
+`* / %`, so `-x as double` is `(-x) as double` and `a + b as double` is `a + (b as double)`.
 
 Slice 5 adds the statements `IfStatement(Condition, Then, ElseBlock?, ElseIf?)`, `WhileStatement`, `ForStatement(Variable, Start,
 End, IsInclusive, Body)`, `BreakStatement` and `ContinueStatement`, and the operators `UnaryOperator.Not`, `BinaryOperator.And` and
@@ -351,6 +366,14 @@ the variable is declared, so `let x = x` does not see the new `x`. A name may no
 already has it: `NIR2005`, worded "in this block" or "in an enclosing block", and the first declaration is kept. Blocks side by
 side can reuse names. Types are looked up by name in `LookupType` (`int`, `double`, `bool`, `string`).
 
+**Strings and conversions.** `+` on two strings is a string; `==` / `!=` on two strings are `bool`; every other operator on
+strings is `NIR3003`. An interpolated string becomes `BoundInterpolatedString(Parts)` in which every part is a string: a
+hole that is not a string is wrapped in a `BoundMemberCallExpression` of its type's zero-argument `ToString()` (found with
+the same `ClrMethods` lookup as other instance calls), a hole of type `()` is `NIR3012`, and a hole that already failed makes
+the whole string an error with no second diagnostic. `x as T` needs `T` to be `int` or `double` (`NIR2006` for an unknown
+name) and `x` to be `int` or `double` (otherwise `NIR3001` at the cast); converting to the same type returns `x` unchanged,
+otherwise the result is `BoundConversion(Operand, Target)`.
+
 **Control flow.** `BindCondition` requires `bool` (`NIR3001` otherwise, and nothing more when the condition already failed).
 `for` bounds are bound before the loop variable exists and must be `int`; the variable is an immutable `int` in its own
 scope, and the body is a nested block inside that scope, so the body cannot redeclare it. `_loopDepth` counts the loops
@@ -423,6 +446,13 @@ Slice 2 additions to emit (`BodyEmitter`, a private class holding the per-functi
   NaN operand makes them false. `!=` is `ceq` then not.
 - The generated runtimeconfig also sets `configProperties: {"System.Globalization.Invariant": true}` so numbers print
   the same on every machine (`2.5`, never `2,5`). `Console.WriteLine(true)` prints `True` (accepted output).
+
+Slice 6 emit additions: string `+` is `call String.Concat(string, string)`, `==` is `call String.op_Equality` (ordinal), `!=`
+that followed by a not (`StringMethods` holds these `MethodInfo`s, taken from the load context). An interpolated string is
+`ldstr ""` when it has no parts; for one part, the part then `ldstr ""` then `Concat(string, string)` so a null becomes
+empty; for 2, 3 or 4 parts the matching `Concat` overload; above 4, a `string[]` filled with `newarr` / `stelem.ref` and
+`Concat(string[])`. `int` to `double` is `conv.r8` and `double` to `int` is `conv.ovf.i4` (truncates toward zero, throws
+`OverflowException` for a value that does not fit and for NaN).
 
 Slice 5 emit additions (`BodyEmitter`): a stack of `(Break, Continue)` labels for the loops being emitted.
 - `if`: `brfalse` to the else label. The `br` over the else part and the end label are emitted only when the then-block can fall

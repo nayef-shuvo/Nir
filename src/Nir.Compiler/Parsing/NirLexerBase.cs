@@ -35,8 +35,13 @@ public abstract class NirLexerBase : Antlr4.Runtime.Lexer
     private readonly Queue<IToken> _pending = new();
     private int _bracketDepth;
     private int _previousTokenType = TokenConstants.InvalidType;
-    private bool _insideString;
-    private int _stringStart;
+
+    // The strings we are inside, outermost first when enumerated from the bottom: where each began and whether it is
+    // interpolated. A string can be inside a hole of another.
+    private readonly Stack<(int Start, bool Interpolated)> _openStrings = new();
+
+    // One brace counter per open hole of an interpolated string: how many `{` have been opened inside it and not yet closed.
+    private readonly Stack<int> _holeBraces = new();
     private SourceText? _source;
     private DiagnosticBag? _diagnostics;
 
@@ -76,22 +81,50 @@ public abstract class NirLexerBase : Antlr4.Runtime.Lexer
                 case TokenConstants.EOF:
                     return EndOfFile(token);
 
-                case NirLexer.STRING_START:
-                    _insideString = true;
-                    _stringStart = token.StartIndex;
+                case NirLexer.STRING_START or NirLexer.INTERP_STRING_START:
+                    _openStrings.Push((token.StartIndex, token.Type == NirLexer.INTERP_STRING_START));
                     _previousTokenType = token.Type;
                     return token;
 
-                case NirLexer.STRING_END:
-                    _insideString = false;
+                case NirLexer.STRING_END or NirLexer.INTERP_STRING_END:
+                    if (_openStrings.Count > 0)
+                    {
+                        _openStrings.Pop();
+                    }
+
                     _previousTokenType = token.Type;
                     return token;
 
-                case NirLexer.UNTERMINATED_STRING:
-                    _insideString = false;
-                    ReportUnterminatedString(token.StartIndex);
-                    _previousTokenType = NirLexer.STRING_END;
-                    return Retype(token, NirLexer.STRING_END);
+                case NirLexer.UNTERMINATED_STRING or NirLexer.INTERP_UNTERMINATED:
+                    var endType = token.Type == NirLexer.UNTERMINATED_STRING ? NirLexer.STRING_END : NirLexer.INTERP_STRING_END;
+                    ReportUnterminatedString(_openStrings.Count > 0 ? _openStrings.Pop().Start : token.StartIndex, token.StartIndex);
+                    _previousTokenType = endType;
+                    return Retype(token, endType);
+
+                case NirLexer.HOLE_START:
+                    // A hole behaves like brackets: a newline inside it is just whitespace.
+                    _holeBraces.Push(0);
+                    _bracketDepth++;
+                    _previousTokenType = token.Type;
+                    return token;
+
+                case NirLexer.LBRACE when _holeBraces.Count > 0:
+                    _holeBraces.Push(_holeBraces.Pop() + 1);
+                    _previousTokenType = token.Type;
+                    return token;
+
+                case NirLexer.RBRACE when _holeBraces.Count > 0 && _holeBraces.Peek() > 0:
+                    _holeBraces.Push(_holeBraces.Pop() - 1);
+                    _previousTokenType = token.Type;
+                    return token;
+
+                case NirLexer.RBRACE when _holeBraces.Count > 0:
+                    // The `}` that closes the hole: back to the text of the interpolated string.
+                    _holeBraces.Pop();
+                    _bracketDepth = Math.Max(0, _bracketDepth - 1);
+                    PopMode();
+                    _previousTokenType = NirLexer.HOLE_END;
+                    return Retype(token, NirLexer.HOLE_END);
 
                 case NirLexer.NEWLINE when _bracketDepth == 0 && EndsStatement(_previousTokenType):
                     _previousTokenType = NirLexer.SEMI;
@@ -119,11 +152,15 @@ public abstract class NirLexerBase : Antlr4.Runtime.Lexer
     {
         var previous = _previousTokenType;
 
-        if (_insideString)
+        if (_openStrings.Count > 0)
         {
-            ReportUnterminatedString(endOfFile.StartIndex);
-            _pending.Enqueue(Create(NirLexer.STRING_END, endOfFile));
-            previous = NirLexer.STRING_END;
+            // Report the outermost open string (the one that began first) and close the innermost so the parser can finish.
+            var outermost = _openStrings.ToArray()[^1];
+            ReportUnterminatedString(outermost.Start, endOfFile.StartIndex);
+            previous = _openStrings.Peek().Interpolated ? NirLexer.INTERP_STRING_END : NirLexer.STRING_END;
+            _pending.Enqueue(Create(previous, endOfFile));
+            _openStrings.Clear();
+            _holeBraces.Clear();
         }
 
         // Go's rule inserts a semicolon before EOF too, so a file that ends without a trailing newline or `;`
@@ -137,8 +174,8 @@ public abstract class NirLexerBase : Antlr4.Runtime.Lexer
         return _pending.Dequeue();
     }
 
-    private void ReportUnterminatedString(int endIndex) =>
-        Report(DiagnosticCodes.UnterminatedString, "unterminated string literal", _stringStart, Math.Max(1, endIndex - _stringStart));
+    private void ReportUnterminatedString(int start, int endIndex) =>
+        Report(DiagnosticCodes.UnterminatedString, "unterminated string literal", start, Math.Max(1, endIndex - start));
 
     private void Report(string code, string message, int start, int length)
     {
@@ -177,6 +214,7 @@ public abstract class NirLexerBase : Antlr4.Runtime.Lexer
         NirLexer.BREAK or
         NirLexer.CONTINUE or
         NirLexer.STRING_END or
+        NirLexer.INTERP_STRING_END or
         NirLexer.RPAREN or
         NirLexer.RBRACE;
 

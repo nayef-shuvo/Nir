@@ -22,9 +22,10 @@ Update this block whenever a task is completed.
 - Slice 4 (first C# interop): **done** (T4.0 to T4.4, 430 tests green). .NET types are found through
   `Clr/ClrUniverse` (a `MetadataLoadContext`); never use `typeof(...)` for a type that reaches the emitter.
 - Slice 5 (control flow): **done** (T5.0 to T5.3, 587 tests green).
-- Next: **slice 6 (strings and conversions)**. It has no task list yet: first ask the user its "Decisions required" (exact
-  escape list, whether `as` applies to `bool` / `string`, what `{x}` prints), record the answers, write tasks `T6.0`...
-  in `docs/roadmap.md`, then start.
+- Slice 6 (strings and conversions): **done** (T6.0 to T6.3, 717 tests green).
+- Next: **slice 7 (structs, methods, mutability by path)**. It has no task list yet: first ask the user the decisions listed
+  in design.md sections 2 to 6 that are still tagged proposed or open (type declaration syntax, struct literal syntax,
+  stored references), record the answers, write tasks `T7.0`... in `docs/roadmap.md`, then start.
 
 ## How to pick up work
 

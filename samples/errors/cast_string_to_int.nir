@@ -1,0 +1,5 @@
+// Expect: NIR3001 "cannot convert 'string' to 'int'" on line 4. `as` converts between int and double only;
+// parse text with the .NET library instead, for example Int32::Parse.
+fn main() {
+    print("42" as int)
+}

@@ -1,0 +1,5 @@
+// Expect: NIR0003 "unknown escape sequence '\q'" on line 4, under the backslash and the letter after it.
+// Known escapes: \n \t \r \\ \" \{
+fn main() {
+    print("a\qb")
+}

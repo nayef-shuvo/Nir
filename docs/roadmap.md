@@ -713,13 +713,96 @@ and a loop variable), `break` and `continue` outside a loop, `!` and `&&` on non
 
 ---
 
-## Later slices (outline; detailed when each starts)
+## Slice 6: strings and conversions
 
-**Slice 6: strings and conversions.** String `+` (two strings only), `==` and `!=` on strings, string interpolation
-(`$"x = {x}"`, port the lexer modes from `reference/NirLexer.g4`), escape decoding in plain and interpolated strings
-(`\n \t \r \\ \" \{`, and `{{` `}}`), and `x as double` / `d as int` (`d as int` throws when out of range or NaN).
-*Decisions required* before coding: exact escape list, whether `as` can also apply to `bool` / `string` (recommendation:
-no), and what `{x}` prints (recommendation: the value's `ToString()` with invariant culture).
+**Goal.** Build and compare text, and convert between `int` and `double`.
+
+```
+fn main() {
+    let name = "Nir"
+    let n = 42
+    print("Hello, " + name + "!")
+    print($"{name} has n = {n}")
+    print("a" == "a")
+    print((n as double) / 4.0)       // 10.5
+}
+```
+
+**Decisions** are recorded in design.md "Strings and conversions" and decisions.md D-055 to D-057.
+
+**Details fixed for this slice:**
+- Lexer. New tokens: `INTERP_STRING_START` (`$"`), `INTERP_TEXT`, `HOLE_START` (the `{` that opens a hole),
+  `HOLE_END` (the `}` that closes it), `INTERP_STRING_END`, keyword `AS`. New modes: `INTERP_STRING` (text between holes).
+  The hole itself is lexed in the default mode: `{` in `INTERP_STRING` is `HOLE_START` and pushes the default mode.
+  `NirLexerBase` keeps a stack of brace counters, one per open hole: a `{` inside a hole counts up, a `}` counts down, and a
+  `}` at zero is retyped `HOLE_END` and pops back to `INTERP_STRING`. A hole counts as a bracket for the newline rule (a
+  newline inside a hole is whitespace). Open strings are tracked in a stack, so an unterminated plain or interpolated string
+  reports `NIR0002` at its opening quote once, as before. `INTERP_STRING_END` is in `EndsStatement`.
+- Text tokens keep the raw text (backslashes included). Decoding happens in `AstBuilder`, which now receives the diagnostic
+  bag: an unknown escape is `NIR0003` `unknown escape sequence '\q'`, spanning the backslash and the next character.
+  `StringLiteralExpression.Value` and `InterpolatedText.Text` are the decoded text.
+- Grammar. `interpolatedString : INTERP_STRING_START interpolatedPart* INTERP_STRING_END`,
+  `interpolatedPart : INTERP_TEXT | HOLE_START expression HOLE_END`, a new expression alternative for it, and
+  `operand=expression AS targetType=IDENTIFIER` (a cast) placed just below unary `-` / `!` and above `* / %`.
+- AST: `InterpolatedStringExpression(Parts)`, `InterpolatedText(Text)`, `InterpolatedHole(Expression)`,
+  `CastExpression(Operand, TargetType)`.
+- Binder. `+` with two `string` operands gives `string`; `==` and `!=` with two `string` operands give `bool`; all other
+  operators on strings stay `NIR3003`. An interpolated string becomes `BoundInterpolatedString(Parts)` where every part is
+  a `string`: text parts are literals and a hole that is not a `string` is wrapped in a call of its type's `ToString()`
+  (found with the existing instance-call lookup). A hole of type `()` is `NIR3012`
+  (`cannot use a value of type '()' in an interpolated string`); a hole that already had an error makes the whole string an
+  error and adds nothing. `x as T`: `T` must name `int` or `double` (`NIR2006` otherwise) and `x` must be `int` or
+  `double` (`NIR3001` `cannot convert 'string' to 'int'` otherwise, at the cast); the result is `BoundConversion`.
+- Emit. String `+` is `call String.Concat(string, string)`; `==` is `call String.op_Equality`, `!=` that plus a not. An
+  interpolated string is `ldstr ""` when empty, `String.Concat` with 2, 3 or 4 strings when it has that many parts, one
+  part followed by `ldstr ""` and `Concat(string, string)` (so a null becomes empty), and a `string[]` with
+  `String.Concat(string[])` above 4. `int` to `double` is `conv.r8`; `double` to `int` is `conv.ovf.i4`; the same type is
+  no instruction. All methods and types come from `ClrUniverse`.
+- Out of scope: `<` / `>` on strings, format specifiers (`{x:F2}`), raw strings, Unicode escapes (`\u0041`), `as` for
+  `bool` / `string`, string indexing and `.Length` (properties, slice 12).
+
+**New diagnostics.** `NIR0003` `unknown escape sequence '\{text}'`; `NIR3012` `cannot use a value of type '()' in an
+interpolated string`. `NIR2006`, `NIR3001`, `NIR3003` are reused.
+
+**Acceptance programs** (`Programs/slice6/`): `+` chains; `==` / `!=` including two separately built equal strings;
+every escape; interpolation with every type, expressions, calls, method calls, a string in a hole, a nested interpolated
+string, `{{` `}}`, an empty hole-less `$""`, a hole at the start and the end; `as` both ways, truncation of negatives
+(`-2.7 as int` is `-2`), precedence (`-x as double`, `a + b as double`), chained `as`; errors for: unknown escape,
+unterminated plain and interpolated strings (the first one in the file), `"n" + 5`, `<` on strings, `"x" as int`,
+`true as double`, `5 as string`, `5 as nope`, a `()` hole, an undefined name in a hole, `{` without `}`; crashes for
+`1e300 as int`-style out-of-range conversions (as xUnit tests, not golden programs, because the exit code differs per OS).
+
+### Tasks
+
+- [x] **T6.0 Lexer, parser and AST**
+  - Modes, tokens, `NirLexerBase` hole and open-string tracking, grammar, AST nodes, escape decoding (`StringEscapes`),
+    `AstBuilder` taking the bag, `AstFormatter`.
+  - Tests: lexer token streams for plain and interpolated strings (hole, nested braces in a hole, nested string in a hole,
+    nested interpolated string, `{{` / `}}`, a newline inside a hole, unterminated cases, escaped quote), `as` keyword;
+    escape decoding unit tests (each escape, unknown escape position, `{{` handling); parser trees for
+    interpolation and casts, precedence of `as` (`-x as double`, `a + b as double`, `x as double as int`,
+    `1 as double * 2.0`), spans; syntax errors report `NIR1001` or `NIR0002` without throwing.
+  - **Done when:** these pass and every older test still passes.
+
+- [x] **T6.1 Binder**
+  - All binder rules above, `BoundInterpolatedString`, `BoundConversion`, `NIR3012`.
+  - Tests with positions for every rule and code, including that errors in holes and operands add nothing more.
+  - **Done when:** these pass.
+
+- [x] **T6.2 Emitter**
+  - Concat, equality, interpolation, conversions.
+  - Tests (via `TestHost.Run`): every behaviour in the acceptance list, with printed values checked by hand; the
+    out-of-range and `NaN` conversions crash with `OverflowException`.
+  - **Done when:** these pass.
+
+- [x] **T6.3 Program tests, samples and docs**
+  - `Programs/slice6/` golden programs and `Slice6ProgramTests`; samples `strings.nir` and `conversions.nir` plus error
+    samples; update `architecture.md` (sections 4 to 8), `CLAUDE.md`, tick tasks.
+  - **Done when:** all acceptance items pass, `dotnet build` has 0 warnings, `dotnet test` is green.
+
+---
+
+## Later slices (outline; detailed when each starts)
 
 **Slice 7: structs, methods, mutability by path.** `type P = struct {...}`, literals `P { x = 1 }`, field read/write,
 value semantics, `impl` blocks, `&self` / `&mut self` (compiled to CLR byref `this`), associated functions

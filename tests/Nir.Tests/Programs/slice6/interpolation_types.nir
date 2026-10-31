@@ -1,0 +1,7 @@
+fn main() {
+    let n = 42
+    let ratio = 7.5
+    let name = "Nir"
+    print($"n = {n}, ratio = {ratio}, even = {n % 2 == 0}, name = {name}")
+    print($"{-5}|{0.1}|{10.0}|{true}|{1 > 2}")
+}

@@ -29,5 +29,17 @@ public sealed record DoubleLiteralExpression(string Text, TextSpan Span) : Expre
 
 public sealed record BoolLiteralExpression(bool Value, TextSpan Span) : Expression(Span);
 
-/// <summary>A string literal. <paramref name="Value"/> is the raw text between the quotes; escapes are not decoded yet.</summary>
+/// <summary><c>$"text {expression} text"</c>. Text parts are decoded; every hole holds an expression.</summary>
+public sealed record InterpolatedStringExpression(ImmutableArray<InterpolatedStringPart> Parts, TextSpan Span) : Expression(Span);
+
+public abstract record InterpolatedStringPart(TextSpan Span) : SyntaxNode(Span);
+
+public sealed record InterpolatedText(string Text, TextSpan Span) : InterpolatedStringPart(Span);
+
+public sealed record InterpolatedHole(Expression Expression, TextSpan Span) : InterpolatedStringPart(Span);
+
+/// <summary><c>operand as type</c>: a conversion between <c>int</c> and <c>double</c>. The type is a plain identifier.</summary>
+public sealed record CastExpression(Expression Operand, Identifier TargetType, TextSpan Span) : Expression(Span);
+
+/// <summary>A string literal. <paramref name="Value"/> is the text between the quotes with its escapes decoded.</summary>
 public sealed record StringLiteralExpression(string Value, TextSpan Span) : Expression(Span);

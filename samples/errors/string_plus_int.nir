@@ -1,0 +1,6 @@
+// Expect: NIR3003 "operator '+' cannot be applied to 'string' and 'int'" on line 5. Nothing is converted
+// for you; use an interpolated string instead: $"count = {count}".
+fn main() {
+    let count = 3
+    print("count = " + count)
+}
