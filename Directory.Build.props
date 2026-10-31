@@ -1,0 +1,32 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Shared by every project; a project overrides only what it needs to. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Strict build">
+    <!-- No warning is allowed to slip through: every project must build clean. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!-- .editorconfig style rules are enforced the same way as compiler warnings. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Runtime performance">
+    <!-- No culture-sensitive text processing anywhere in the compiler; skip loading ICU. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TieredPGO>true</TieredPGO>
+    <!-- Short-lived CLI processes start faster under workstation (non-concurrent) GC
+         than server GC, which sizes itself for long-running, multi-core workloads. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+</Project>

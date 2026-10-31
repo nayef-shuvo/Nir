@@ -1,0 +1,41 @@
+# Decision log
+
+Append-only. Newest at the bottom. Each entry: id, date, decision, reason. Never edit an old entry; if a decision
+changes, add a new entry that says it supersedes the old one, and update `design.md`.
+Language details live in `design.md`; this file records **that** and **why** a decision was made.
+
+| Id | Date | Decision | Reason |
+|---|---|---|---|
+| D-001 | 2026-09-08 | Target .NET (now .NET 10) and emit IL directly, not C# source. | Full control, no second compiler in the loop, and it is the learning goal. |
+| D-002 | 2026-09-09 | Lexer and parser use ANTLR4, not hand-written. | User's explicit choice after discarding a hand-written lexer. |
+| D-003 | 2026-11-01 | Nir is "Kotlin for C#": the CLR object model, C# interop, BCL used directly. Not LLVM. | Interop was the first reason for the language; LLVM would remove the BCL and force a custom runtime and standard library. |
+| D-004 | 2026-11-01 | Restart in a new repo (`Nir2`). The old repo is reference only. | Earlier attempts stalled because syntax was built before semantics were settled. |
+| D-005 | 2026-11-01 | Build in vertical slices (one feature through all phases), not layer by layer. | A design change then costs one small slice, not a finished layer. |
+| D-006 | 2026-11-01 | Bindings are `let` and `let mut`. Parameters are never assignable. | Clear split between "can rebind the name" and "can change the object". Shadow with `let mut x = x`. |
+| D-007 | 2026-11-01 | Structs are value types. `&T` is a heap reference, created at the use site (`&T {...}` or `&` of a whole variable), compiled to a generated `Ref<T>`. | Linked structures and sharing need heap references; use-site choice kept (Go-like) over type-site (C# class/struct). Cost accepted: C# sees `Ref<T>`. |
+| D-008 | 2026-11-01 | No references into fields or array elements in v1. | The CLR has no heap reference to an interior location. Easy to add later, hard to remove. |
+| D-009 | 2026-11-01 | `&self`, `&T` and `&mut T` parameters are borrows (CLR `ref`), cannot be stored. A stored reference must be a heap reference. | Method calls on locals must not allocate. |
+| D-010 | 2026-11-01 | Mutability follows the access path (`let mut` for values, `&mut` for heap references). No `mut` on fields. `frozen` types may come later. | Fewer keywords; one rule. Gives up a type-level immutability guarantee for v1. |
+| D-011 | 2026-11-01 | No aliasing rules, no borrow checker. `&T` means "no writes through this reference". | Aliasing is inherent to linked structures; a borrow checker is a different language. |
+| D-012 | 2026-11-01 | Methods take `&self` or `&mut self` only. No standalone `self`. No ownership or moves. | The GC removes ownership. Standalone `self` would only mean "copy". |
+| D-013 | 2026-11-01 | No inheritance. Composition only. | User's choice; keeps the model small. |
+| D-014 | 2026-11-01 | Structural (duck-typed) types are deferred, not rejected. | Possible by per-type specialization, but Nir-only and costly; named arguments, defaults and `with` cover v1 needs. |
+| D-015 | 2026-11-01 | Modules: `namespace` per file; `using` imports exactly one named thing; no wildcards; `impl` must be in the type's namespace. | Reading a file must show where every name comes from. |
+| D-016 | 2026-11-01 | .NET is mirrored under `clr::cs::<Namespace>` (`clr::fsharp` later). Extension methods (Nir and C#) are imported by method name. | Avoid name collisions; keep origin explicit for extensions too. |
+| D-017 | 2026-11-01 | `std` is Nir's own library, separate from `clr`. v1 `std` is only a small prelude. | `std::fs` may later wrap the BCL; no need to build it now. |
+| D-018 | 2026-11-01 | Errors are values: `E!T`, `try`, `catch`, errors carry data, calls into C# are opt-in `try`, unrecoverable failures crash. | Zig-style handling; C# exceptions become `anyerror` only where the user writes `try`. |
+| D-019 | 2026-11-01 | The "nothing" type is `()`. There is no `void` keyword. `anyerror!` means `anyerror!()`. | Tuples already exist; one fewer concept. |
+| D-020 | 2026-11-01 | Error types are their own kind: `type E = error {...}`. Returning an error needs the `error` keyword. `T` in `E!T` may not be an error type. | User's choice; makes the failure path visible in code. |
+| D-021 | 2026-11-01 | Unions use the keyword form `union { A, B }` for now. `E!T` is shorthand for a union of `E` and `T`. `union` and `match` are in v1. | Multi-error functions need them. `A \| B` may be revisited. |
+| D-022 | 2026-11-01 | One `enum` keyword with two shapes: plain values (CLR enum) and cases that carry data. `anytype` dropped. | User wants flexible enums; `anytype` belongs with deferred generics/structural types. |
+| D-023 | 2026-11-01 | Emit with `System.Reflection.Emit.PersistedAssemblyBuilder`, writing a `.dll` plus `.runtimeconfig.json`. **Unverified until T1.1.** | Built into .NET 9+, no extra package. |
+| D-024 | 2026-11-01 | `nir run` compiles to a temp directory and runs `dotnet <dll>` as a child process. | Isolation and simpler tests than in-process loading. |
+| D-025 | 2026-11-01 | One compiler project (`Nir.Compiler`) plus `Nir.Cli` and `Nir.Tests`. | Per-phase projects add ceremony for a one-person compiler. |
+| D-026 | 2026-11-01 | ANTLR is temporary and confined to `Parsing/`; everything after it sees only our AST. | User plans to replace it later. |
+| D-027 | 2026-11-01 | No blanket `unsafe` around C# calls. Only a narrow marker may be added later for passing immutable values to mutable C# `ref` parameters. | Calling C# must be ordinary, or Nir loses its purpose. |
+| D-028 | 2026-11-01 | D-023 verified by the T1.1 spike: `PersistedAssemblyBuilder` output runs with `dotnet x.dll` when a `runtimeconfig.json` is written next to it. | See `architecture.md` section 9. |
+| D-029 | 2026-11-01 | Both ANTLR grammars live in one project (`tokenVocab` works there). | Verified in T1.0; no grammar-copy workaround needed. |
+| D-030 | 2026-11-01 | Redeclaring a name in the same block is an error. Whether a function body may shadow a parameter is still open. | User's choice; avoids silent name reuse. |
+| D-031 | 2026-11-01 | Integer arithmetic is checked: overflow throws. A build flag for wrapping may come later. | User's choice; safer default. Emitted with `add.ovf`, `sub.ovf`, `mul.ovf`. |
+| D-032 | 2026-11-01 | Primitive types for now: `int`, `double`, `bool`, `string`. No `float`. | Keep the first numeric slice small. |
+| D-033 | 2026-11-01 | No implicit conversions between numeric types. | User's choice; conversion syntax is decided in slice 5. |
