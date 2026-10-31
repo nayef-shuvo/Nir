@@ -1,0 +1,17 @@
+fn main() {
+    a()
+}
+
+fn c() {
+    print("c")
+}
+
+fn a() {
+    print("a")
+    b()
+}
+
+fn b() {
+    print("b")
+    c()
+}

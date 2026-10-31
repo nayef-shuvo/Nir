@@ -231,4 +231,31 @@ public class LexerTests
     {
         Assert.Equal("IDENTIFIER IDENTIFIER SEMI EOF", TokenFormatter.Names("letter muted"));
     }
+
+    [Fact]
+    public void Arrow_is_one_token()
+    {
+        Assert.Equal("ARROW EOF", TokenFormatter.Names("->"));
+        Assert.Equal("MINUS GT EOF", TokenFormatter.Names("- >"));
+    }
+
+    [Fact]
+    public void Return_is_a_keyword()
+    {
+        Assert.Equal("RETURN IDENTIFIER SEMI EOF", TokenFormatter.Names("return returned"));
+    }
+
+    [Fact]
+    public void Newline_after_return_ends_the_statement()
+    {
+        Assert.Equal("RETURN SEMI IDENTIFIER SEMI EOF", TokenFormatter.Names("return\nx"));
+    }
+
+    [Fact]
+    public void Function_signature_tokens()
+    {
+        Assert.Equal(
+            "FN IDENTIFIER LPAREN IDENTIFIER COLON IDENTIFIER COMMA IDENTIFIER COLON IDENTIFIER RPAREN ARROW IDENTIFIER LBRACE RBRACE SEMI EOF",
+            TokenFormatter.Names("fn add(a: int, b: int) -> int {}"));
+    }
 }

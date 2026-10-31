@@ -1,0 +1,6 @@
+fn f() -> int {
+    print(1)
+}
+
+fn main() {
+}

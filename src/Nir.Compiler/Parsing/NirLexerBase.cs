@@ -173,6 +173,7 @@ public abstract class NirLexerBase : Antlr4.Runtime.Lexer
         NirLexer.DOUBLE_LITERAL or
         NirLexer.TRUE or
         NirLexer.FALSE or
+        NirLexer.RETURN or
         NirLexer.STRING_END or
         NirLexer.RPAREN or
         NirLexer.RBRACE;

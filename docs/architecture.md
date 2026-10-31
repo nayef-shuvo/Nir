@@ -121,7 +121,7 @@ Codes are never reused or renumbered. Each code is a `public const string` in a 
 period, names in single quotes, say what is wrong, not what to do. Example: `'x' is not defined`,
 `cannot assign to 'x' because it is not mutable`.
 
-Codes defined so far (slices 1 and 2):
+Codes defined so far (slices 1 to 3):
 
 | Code | Meaning | Message template |
 |---|---|---|
@@ -133,13 +133,17 @@ Codes defined so far (slices 1 and 2):
 | NIR2003 | duplicate function | `function '{name}' is already defined` |
 | NIR2004 | wrong argument count | `'{name}' expects {n} argument(s) but got {m}` |
 | NIR2005 | name declared twice in one block | `'{name}' is already declared in this block` |
-| NIR2006 | unknown type in an annotation | `unknown type '{name}'` |
+| NIR2006 | unknown type in an annotation, parameter or return type | `unknown type '{name}'` |
+| NIR2007 | `main` with parameters or a return type | `'main' must have no parameters and no return type` |
 | NIR3001 | type mismatch | `cannot convert '{from}' to '{to}'` |
 | NIR3002 | assignment to a non-`mut` variable | `cannot assign to '{name}' because it is not mutable` |
 | NIR3003 | operator not defined for these types | `operator '{op}' cannot be applied to '{left}' and '{right}'` (unary: `... to '{type}'`) |
 | NIR3004 | literal out of range | `'{text}' is out of range for '{type}'` |
 | NIR3005 | variable would have type `()` | `cannot declare '{name}' with type '()'` |
 | NIR3006 | no overload accepts the argument types | `no overload of '{name}' accepts ({types})` |
+| NIR3007 | function does not end with a return | `'{name}' does not return a value on every path` |
+| NIR3008 | `return value` in a `()` function | `cannot return a value from '{name}' because it returns '()'` |
+| NIR3009 | bare `return` in a value function | `'{name}' must return a value of type '{type}'` |
 
 ## 5. Parsing (`Nir.Compiler.Parsing`)
 
@@ -185,7 +189,7 @@ The newline logic was ported from `reference/NirLexerBase.cs`; do not redesign i
 file replaces the old single stashed `EOF`.
 
 **Keywords.** A keyword is added to the lexer grammar in the slice that first uses it. Keywords are listed before
-`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Keywords so far: `fn`, `let`, `mut`, `true`, `false`.
+`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Keywords so far: `fn`, `let`, `mut`, `return`, `true`, `false`. `->` is the token `ARROW`.
 
 **Strings.** Plain strings use lexer modes: `STRING_START`, `STRING_TEXT`, `STRING_END`. The lexer keeps raw text;
 escape sequences are decoded by `AstBuilder` (from slice 5). In slice 1 a `StringLiteralExpression.Value` is the raw text
@@ -232,6 +236,10 @@ Slice 2 adds: `VariableDeclaration(Name, IsMutable, DeclaredType?, Initializer)`
 Literal text stays a string so the binder can report out-of-range values. The expression grammar is a precedence ladder:
 unary `-`, then `* / %`, `+ -`, `< <= > >=`, `== !=`, all left-associative.
 
+Slice 3 adds: `Parameter(Name, Type)` and `ReturnStatement(Value?)`, and `FunctionDeclaration` now has
+`Parameters` and an optional `ReturnType` (null means the function returns `()`). Types are plain identifiers;
+the binder decides which names are types.
+
 Later slices add nodes; they never change the meaning of existing ones. Each node type is created only by
 `AstBuilder`. `Span` covers the node's full source text, from its first token to its last.
 
@@ -264,6 +272,13 @@ Slice 2 adds to the bound tree: `BoundVariableDeclaration`, `BoundAssignment` (s
 `BoundErrorExpression` (expressions); the `BoundBinaryOperator` / `BoundUnaryOperator` enums (separate from the syntax
 ones, because Emit may not reference Syntax); and `VariableSymbol(Name, Type, IsMutable)`.
 `TypeSymbol` gains `IntType`, `DoubleType`, `BoolType` and `ErrorType`.
+
+Slice 3 adds `BoundReturnStatement(Value?)`. `UserFunctionSymbol` now carries its resolved return type and its
+`Parameters`, which are immutable `VariableSymbol`s. Signatures are resolved in pass 1, before any body is bound.
+Parameters are put in the function's single scope first, then the body's variables, so a body cannot redeclare a
+parameter (`NIR2005`) or assign one (`NIR3002`). `BindReturn` checks the value against the function's return type. The
+"every path returns" rule is the simple one (D-038): a function whose return type is not `()` must have a
+`BoundReturnStatement` as the last statement of its body (`NIR3007`, reported at the function name).
 
 **Error recovery.** `BindExpression` never returns null. A failed expression becomes `BoundErrorExpression` with
 `TypeSymbol.ErrorType`. Anything that receives an error-typed operand reports nothing more and yields an error type, so
@@ -330,6 +345,9 @@ Approach (verified by T1.1, see section 9):
 
 Slice 2 additions to emit (`BodyEmitter`, a private class holding the per-function state, which is the local variables):
 - Locals: `DeclareLocal` at each declaration, `stloc` / `ldloc`.
+- Functions: methods are defined with the declared parameter and return CLR types. A parameter is read with `ldarg`
+  (parameters are never assigned). `return value` emits the value then `ret`. The trailing `ret` is emitted only for
+  `()` functions; any other function ends with its own `return`.
 - Integer `+ - *` use `add.ovf` / `sub.ovf` / `mul.ovf` (overflow throws, design.md "Numbers"); integer negation is `0 - x`
   with `sub.ovf`; `div` and `rem` throw on division by zero. `double` arithmetic uses plain `add sub mul div rem neg`.
 - Comparisons use `clt cgt ceq`. `<=` and `>=` are "not greater" / "not less", using `cgt.un` / `clt.un` for `double` so a

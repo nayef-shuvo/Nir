@@ -13,4 +13,7 @@ public sealed record ExpressionStatement(Expression Expression, TextSpan Span) :
 public sealed record VariableDeclaration(Identifier Name, bool IsMutable, Identifier? DeclaredType, Expression Initializer, TextSpan Span)
     : Statement(Span);
 
+/// <summary><c>return</c> or <c>return value</c>. <paramref name="Value"/> is null for a bare return.</summary>
+public sealed record ReturnStatement(Expression? Value, TextSpan Span) : Statement(Span);
+
 public sealed record AssignmentStatement(Identifier Target, Expression Value, TextSpan Span) : Statement(Span);

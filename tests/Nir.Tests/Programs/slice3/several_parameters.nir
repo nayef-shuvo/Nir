@@ -1,0 +1,9 @@
+fn show(label: string, n: int, flag: bool) {
+    print(label)
+    print(n)
+    print(flag)
+}
+
+fn main() {
+    show("label", 42, true)
+}

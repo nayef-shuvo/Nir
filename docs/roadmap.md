@@ -425,15 +425,69 @@ a new name), `-> type` return types, `return expr`, bare
 `return` in unit functions, calls with arguments, recursion, functions calling each other in any order. `main` must have
 no parameters and the unit return type.
 
-**New diagnostics.** wrong argument type; missing return on some path; return value in a unit function; return type
-mismatch; `main` with parameters or a return type.
+**Decision (answered 2026-11-01, D-038):** the "every path returns" check is the simple rule. A function whose return
+type is not `()` must have a `return value` as the last statement of its body. (When `if` arrives in slice 5, a final
+`if`/`else` whose branches both end in `return` will count too.) Functions that return `()` need no `return`. There are no
+implicit last-expression results; `return` is always explicit.
 
-**Decisions required:** whether a "not all code paths return" check uses a simple rule (last statement of the block is
-`return`, or both branches of an `if` return) or full flow analysis. Recommendation: simple rule now, revisit with `match`.
-Implicit last-expression results are **not** supported (design section 1 uses explicit `return`).
+**Details fixed for this slice:**
+- Grammar: `ARROW` (`->`), keyword `RETURN` (`return`; added to `EndsStatement` so a bare `return` followed by a newline
+  ends the statement). `functionDeclaration : FN name=IDENTIFIER LPAREN parameterList? RPAREN (ARROW returnType=IDENTIFIER)? body=block`,
+  `parameterList : parameter (COMMA parameter)* COMMA?`, `parameter : name=IDENTIFIER COLON type=IDENTIFIER`,
+  `returnStatement : RETURN value=expression?`. The type after `->` is a plain identifier (`int`, `double`, `bool`,
+  `string`); there is no way to write `()`, you simply omit `-> type`.
+- AST: `FunctionDeclaration(Name, Parameters, ReturnType?, Body)`, `Parameter(Name, Type)`, `ReturnStatement(Value?)`.
+- Parameters are variables that cannot be assigned (assigning one is `NIR3002`). Parameters and the function body share
+  one scope (D-034), so redeclaring a parameter in the body is `NIR2005`, and two parameters with the same name is
+  `NIR2005` at the second one.
+- Unknown parameter or return type is `NIR2006` (reuse). Wrong argument count is `NIR2004` and a wrong argument type is
+  `NIR3001` at the argument (both exist).
+- `return` checks: in a `()` function, `return value` is `NIR3008` at the value. In another function, a bare `return` is
+  `NIR3009` at the `return` statement, and a value of the wrong type is `NIR3001` at the value. A function that needs a
+  return but does not end with one is `NIR3007` at the function name. Code after a `return` is allowed (no warnings yet).
+- `main` must have no parameters and no return type, otherwise `NIR2007` at its name.
+- A call as a statement may discard a result (`add(1, 2)` on its own line is allowed).
+- Emit: methods get the declared parameter and return CLR types; parameters are read with `ldarg`; `return value` is
+  the value then `ret`; the trailing `ret` is emitted only for `()` functions (others end with their own `return`).
+- New diagnostic codes: `NIR2007` `'main' must have no parameters and no return type`; `NIR3007`
+  `'{name}' does not return a value on every path`; `NIR3008` `cannot return a value from '{name}' because it returns '()'`;
+  `NIR3009` `'{name}' must return a value of type '{type}'`.
 
-**Acceptance programs** (`Programs/slice3/`): recursion (factorial, fibonacci), mutual calls,
-redeclaring a parameter in the body is an error, assigning a parameter is an error, wrong argument type, missing return, return in unit function.
+**Acceptance programs** (`Programs/slice3/`): calls between functions, a function with several
+parameters of different types, a function returning each type, early bare `return` in a `()` function, a call result
+used in an expression and discarded as a statement, and errors for: redeclaring a parameter in the body, assigning a
+parameter, duplicate parameter names, wrong argument type, wrong argument count, missing return, return value in a `()`
+function, bare return in a value function, return type mismatch, unknown parameter type, and a bad `main` signature.
+
+### Tasks
+
+- [x] **T3.0 Syntax**
+  - Lexer: `ARROW`, `RETURN`; `EndsStatement` gains `RETURN`. Parser rules and AST nodes above; `AstBuilder`.
+  - Tests: lexer `Arrow_is_one_token` (`->`, and `-` then `>` separated by a space stays two tokens),
+    `Return_is_a_keyword`, `Newline_after_return_ends_the_statement`; parser trees for a function with parameters and a
+    return type, a trailing comma in the parameter list, `return`, `return expr`, spans of `Parameter` and
+    `ReturnStatement`, and syntax errors (`fn f(a) {}`, `fn f(a: ) {}`, `fn f() -> {}`) that report `NIR1001` without throwing.
+  - **Done when:** these pass.
+
+- [x] **T3.1 Binder**
+  - Symbols: `UserFunctionSymbol` gets its resolved return type and `Parameters` (`VariableSymbol`s). Resolve signatures
+    in pass 1. Bind parameters into the body scope. `BoundReturnStatement(Value?)`.
+  - All checks and codes listed above.
+  - Tests with positions for every code; also: recursion binds, mutual recursion binds, `print(add(1, 2))` picks the
+    `int` overload, an error-typed argument adds no second diagnostic.
+  - **Done when:** these pass.
+
+- [x] **T3.2 Emitter** (note: recursion that terminates needs `if`, so factorial, fibonacci and `is_even` / `is_odd`
+  are *run* in slice 5; slice 3 only checks that recursive and mutually recursive functions bind, which `BinderTests` does)
+  - Parameters and return types in `DefineMethod`, `ldarg`, `BoundReturnStatement`, the conditional trailing `ret`.
+  - Tests (via `TestHost.Run`): `add`, functions calling other functions, each return type, a `()` function with early `return` (code after it does not run), result discarded as a statement,
+    arguments evaluated left to right, a parameter used in a nested expression.
+  - **Done when:** these pass.
+
+- [x] **T3.3 Program tests and docs**
+  - `Programs/slice3/` golden programs for every acceptance item and `Slice3ProgramTests`.
+  - Update `architecture.md` (sections 4, 6, 7, 8), tick tasks, update the status block in `CLAUDE.md`, append decisions.
+  - **Done when:** all acceptance items pass, `dotnet build` has 0 warnings, `dotnet test` is green.
 
 ---
 
@@ -475,7 +529,8 @@ then read through a temp path, `Environment`-free output; errors for unknown nam
 
 ## Later slices (outline; detailed when each starts)
 
-**Slice 5: control flow and strings.** `if` / `else if` / `else`; `for i in a..b`; `while`; `break` / `continue`; boolean
+**Slice 5: control flow and strings.** Also run the recursion programs that slice 3 could only bind: factorial,
+fibonacci, and mutually recursive `is_even` / `is_odd`. `if` / `else if` / `else`; `for i in a..b`; `while`; `break` / `continue`; boolean
 operators; string interpolation (`$"..."`, port the lexer modes from `reference/NirLexer.g4`) and escape decoding;
 string `+`; explicit numeric conversion. *Decisions required:* is `a..b` end-exclusive (recommendation: yes); does `while`
 exist (recommendation: yes); boolean operator spelling (`&&` `||` `!` or `and` `or` `not`); conversion syntax.

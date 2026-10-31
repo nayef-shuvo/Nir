@@ -1,0 +1,6 @@
+fn f(x: int) {
+    x = 1
+}
+
+fn main() {
+}

@@ -126,11 +126,12 @@ public class BinderTests
     }
 
     [Fact]
-    public void Syntax_errors_are_not_repeated_by_the_binder()
+    public void Compiler_does_not_bind_after_syntax_errors()
     {
-        var (_, diagnostics) = Bind("fn main( {\n}");
+        var result = Nir.Compiler.NirCompiler.Compile(new SourceText("t.nir", "fn main( {\n}"));
 
-        Assert.All(diagnostics, d => Assert.StartsWith("NIR1", d, StringComparison.Ordinal));
+        Assert.False(result.Succeeded);
+        Assert.All(result.Diagnostics, d => Assert.StartsWith("NIR1", d.Code, StringComparison.Ordinal));
     }
 
     [Theory]
@@ -411,5 +412,228 @@ public class BinderTests
         var (_, diagnostics) = BindBody("let x = nope()", "print(x + 1)");
 
         Assert.Equal(["NIR2001 2:13"], diagnostics);
+    }
+
+    private const string Add = "fn add(a: int, b: int) -> int {\n    return a + b\n}\n";
+
+    [Fact]
+    public void Function_with_parameters_and_result_binds()
+    {
+        var (program, diagnostics) = Bind(Add + "fn main() {\n    print(add(1, 2))\n}");
+
+        Assert.Empty(diagnostics);
+        var add = program!.Functions.Single(f => f.Symbol.Name == "add").Symbol;
+        Assert.Equal(TypeSymbol.IntType, add.ReturnType);
+        Assert.Equal([TypeSymbol.IntType, TypeSymbol.IntType], add.ParameterTypes.ToArray());
+    }
+
+    [Fact]
+    public void Call_result_has_the_return_type()
+    {
+        var (program, _) = Bind(Add + "fn main() {\n    print(add(1, 2))\n}");
+
+        var main = program!.Functions.Single(f => f.Symbol.Name == "main");
+        var print = (BoundCallExpression)((BoundExpressionStatement)main.Body.Statements[0]).Expression;
+        Assert.Equal(TypeSymbol.IntType, print.Arguments[0].Type);
+        Assert.Equal(TypeSymbol.IntType, print.Target.ParameterTypes[0]);
+    }
+
+    [Fact]
+    public void Recursion_and_mutual_recursion_bind()
+    {
+        var (_, diagnostics) = Bind(
+            "fn fact(n: int) -> int {\n    return n * fact(n - 1)\n}\n" +
+            "fn is_even(n: int) -> bool {\n    return is_odd(n - 1)\n}\n" +
+            "fn is_odd(n: int) -> bool {\n    return is_even(n - 1)\n}\n" +
+            "fn main() {\n}");
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Redeclaring_a_parameter_in_the_body_reports_NIR2005()
+    {
+        var (_, diagnostics) = Bind("fn f(x: int) {\n    let x = 1\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR2005 2:9"], diagnostics);
+    }
+
+    [Fact]
+    public void Assigning_a_parameter_reports_NIR3002()
+    {
+        var (_, diagnostics) = Bind("fn f(x: int) {\n    x = 1\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR3002 2:5"], diagnostics);
+    }
+
+    [Fact]
+    public void A_parameter_can_be_copied_to_a_mutable_variable()
+    {
+        var (_, diagnostics) = Bind("fn f(x: int) {\n    let mut y = x\n    y = y + 1\n}\nfn main() {\n}");
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Duplicate_parameter_names_report_NIR2005_at_the_second()
+    {
+        var (_, diagnostics) = Bind("fn f(x: int, x: int) {\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR2005 1:14"], diagnostics);
+    }
+
+    [Fact]
+    public void Unknown_parameter_type_reports_NIR2006()
+    {
+        var (_, diagnostics) = Bind("fn f(x: foo) {\n    print(x)\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR2006 1:9"], diagnostics);
+    }
+
+    [Fact]
+    public void Unknown_return_type_reports_NIR2006_and_nothing_more()
+    {
+        var (_, diagnostics) = Bind("fn f() -> foo {\n}\nfn main() {\n    print(f())\n}");
+
+        Assert.Equal(["NIR2006 1:11"], diagnostics);
+    }
+
+    [Fact]
+    public void Wrong_argument_type_reports_NIR3001_at_the_argument()
+    {
+        var (_, diagnostics) = Bind(Add + "fn main() {\n    print(add(1, 2.5))\n}");
+
+        Assert.Equal(["NIR3001 5:18"], diagnostics);
+    }
+
+    [Theory]
+    [InlineData("add(1)")]
+    [InlineData("add(1, 2, 3)")]
+    [InlineData("add()")]
+    public void Wrong_argument_count_reports_NIR2004(string call)
+    {
+        var (_, diagnostics) = Bind(Add + $"fn main() {{\n    {call}\n}}");
+
+        Assert.Equal(["NIR2004 5:5"], diagnostics);
+    }
+
+    [Fact]
+    public void Error_argument_to_a_user_function_adds_nothing()
+    {
+        var (_, diagnostics) = Bind(Add + "fn main() {\n    print(add(nope(), 1))\n}");
+
+        Assert.Equal(["NIR2001 5:15"], diagnostics);
+    }
+
+    [Fact]
+    public void Missing_return_reports_NIR3007_at_the_function_name()
+    {
+        var (_, diagnostics) = Bind("fn f() -> int {\n    print(1)\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR3007 1:4"], diagnostics);
+    }
+
+    [Fact]
+    public void Empty_body_with_a_return_type_reports_NIR3007()
+    {
+        var (_, diagnostics) = Bind("fn f() -> int {\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR3007 1:4"], diagnostics);
+    }
+
+    [Fact]
+    public void Unit_function_needs_no_return()
+    {
+        var (_, diagnostics) = Bind("fn f() {\n    print(1)\n}\nfn main() {\n}");
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Return_value_in_a_unit_function_reports_NIR3008()
+    {
+        var (_, diagnostics) = Bind("fn f() {\n    return 1\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR3008 2:12"], diagnostics);
+    }
+
+    [Fact]
+    public void Bare_return_in_a_unit_function_is_fine()
+    {
+        var (_, diagnostics) = Bind("fn f() {\n    print(1)\n    return\n}\nfn main() {\n}");
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Returning_a_unit_call_from_a_unit_function_is_fine()
+    {
+        var (_, diagnostics) = Bind("fn g() {\n}\nfn f() {\n    return g()\n}\nfn main() {\n}");
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Bare_return_in_a_value_function_reports_NIR3009()
+    {
+        var (_, diagnostics) = Bind("fn f() -> int {\n    return\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR3009 2:5"], diagnostics);
+    }
+
+    [Fact]
+    public void Return_of_the_wrong_type_reports_NIR3001_at_the_value()
+    {
+        var (_, diagnostics) = Bind("fn f() -> int {\n    return 2.5\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR3001 2:12"], diagnostics);
+    }
+
+    [Fact]
+    public void Returning_a_unit_call_from_a_value_function_reports_NIR3001()
+    {
+        var (_, diagnostics) = Bind("fn g() {\n}\nfn f() -> int {\n    return g()\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR3001 4:12"], diagnostics);
+    }
+
+    [Fact]
+    public void Error_in_the_returned_value_adds_nothing()
+    {
+        var (_, diagnostics) = Bind("fn f() -> int {\n    return nope()\n}\nfn main() {\n}");
+
+        Assert.Equal(["NIR2001 2:12"], diagnostics);
+    }
+
+    [Fact]
+    public void Code_after_a_return_is_allowed()
+    {
+        var (_, diagnostics) = Bind("fn f() -> int {\n    return 1\n    print(2)\n    return 3\n}\nfn main() {\n}");
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Main_with_a_parameter_reports_NIR2007()
+    {
+        var (_, diagnostics) = Bind("fn main(x: int) {\n}");
+
+        Assert.Equal(["NIR2007 1:4"], diagnostics);
+    }
+
+    [Fact]
+    public void Main_with_a_return_type_reports_NIR2007()
+    {
+        var (_, diagnostics) = Bind("fn main() -> int {\n    return 0\n}");
+
+        Assert.Equal(["NIR2007 1:4"], diagnostics);
+    }
+
+    [Fact]
+    public void Call_result_can_be_discarded_or_stored()
+    {
+        var (_, diagnostics) = Bind(Add + "fn main() {\n    add(1, 2)\n    let y = add(3, 4)\n    print(y)\n}");
+
+        Assert.Empty(diagnostics);
     }
 }

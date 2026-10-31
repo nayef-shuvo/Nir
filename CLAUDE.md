@@ -18,9 +18,10 @@ Update this block whenever a task is completed.
 
 - Slice 1 (hello world): **done** (T1.0 to T1.9, 83 tests green, committed on `main`).
 - Slice 2 (bindings and arithmetic): **done** (T2.0 to T2.4, 203 tests green).
-- Next: **slice 3 (functions with parameters and results)**. It has no task list yet: first ask the user the one
-  decision listed in its roadmap section (how to check "all code paths return"), then write tasks `T3.0`... in
-  `docs/roadmap.md` in the format of slices 1 and 2, then start. Open for slice 5: whether nested blocks may redeclare
+- Slice 3 (functions with parameters and results): **done** (T3.0 to T3.3, 281 tests green).
+- Next: **slice 4 (first C# interop)**. It has no task list yet: write tasks `T4.0`... in `docs/roadmap.md` in the
+  format of the earlier slices, then start. Its technical choice (how .NET types are found, ideally with
+  `MetadataLoadContext`) is recorded in `decisions.md` when made. Open for slice 5: whether nested blocks may redeclare
   outer names (design.md "Scopes").
 
 ## How to pick up work

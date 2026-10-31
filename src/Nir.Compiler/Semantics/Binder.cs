@@ -17,6 +17,7 @@ public static class Binder
     {
         private readonly Dictionary<string, UserFunctionSymbol> _functions = [];
         private Dictionary<string, VariableSymbol> _variables = [];
+        private UserFunctionSymbol? _currentFunction;
         private bool _hadError;
 
         public BoundProgram? Bind(CompilationUnit unit)
@@ -30,7 +31,7 @@ public static class Binder
                     continue;
                 }
 
-                _functions[declaration.Name.Text] = new UserFunctionSymbol(declaration);
+                _functions[declaration.Name.Text] = DeclareFunction(declaration);
             }
 
             if (!_functions.TryGetValue("main", out var entryPoint))
@@ -40,26 +41,114 @@ public static class Binder
 
             // Pass 2: bind the bodies.
             var functions = _functions.Values
-                .Select(symbol => new BoundFunction(symbol, BindBlock(symbol.Declaration.Body)))
+                .Select(BindFunction)
                 .ToImmutableArray();
 
             return _hadError || entryPoint is null ? null : new BoundProgram(functions, entryPoint);
         }
 
-        // One flat scope per function body. A variable is visible only after its declaration.
-        private BoundBlock BindBlock(Block block)
+        // Resolves a function's signature. This happens for every function before any body is bound.
+        private UserFunctionSymbol DeclareFunction(FunctionDeclaration declaration)
         {
-            _variables = [];
-            return new BoundBlock([.. block.Statements.Select(BindStatement)]);
+            var returnType = declaration.ReturnType is { } annotation ? ResolveType(annotation) : TypeSymbol.UnitType;
+            var parameters = declaration.Parameters
+                .Select(p => new VariableSymbol(p.Name.Text, ResolveType(p.Type), isMutable: false))
+                .ToImmutableArray();
+
+            if (declaration.Name.Text == "main" && (declaration.ReturnType is not null || parameters.Length > 0))
+            {
+                Error(DiagnosticCodes.InvalidEntryPoint, "'main' must have no parameters and no return type", declaration.Name.Span);
+            }
+
+            return new UserFunctionSymbol(declaration, returnType, parameters);
         }
+
+        private TypeSymbol ResolveType(Identifier name)
+        {
+            if (LookupType(name.Text) is { } type)
+            {
+                return type;
+            }
+
+            Error(DiagnosticCodes.UnknownType, $"unknown type '{name.Text}'", name.Span);
+            return TypeSymbol.ErrorType;
+        }
+
+        // One flat scope per function: the parameters first, then the body's variables. A variable is visible only
+        // after its declaration.
+        private BoundFunction BindFunction(UserFunctionSymbol function)
+        {
+            _currentFunction = function;
+            _variables = [];
+
+            var declaration = function.Declaration;
+            for (var i = 0; i < function.Parameters.Length; i++)
+            {
+                var parameter = function.Parameters[i];
+                if (_variables.ContainsKey(parameter.Name))
+                {
+                    Error(DiagnosticCodes.AlreadyDeclared, $"'{parameter.Name}' is already declared in this block", declaration.Parameters[i].Name.Span);
+                }
+                else
+                {
+                    _variables[parameter.Name] = parameter;
+                }
+            }
+
+            var body = BindBlock(declaration.Body);
+
+            var mustReturn = function.ReturnType != TypeSymbol.UnitType && function.ReturnType != TypeSymbol.ErrorType;
+            if (mustReturn && body.Statements.LastOrDefault() is not BoundReturnStatement)
+            {
+                Error(DiagnosticCodes.MissingReturn, $"'{function.Name}' does not return a value on every path", declaration.Name.Span);
+            }
+
+            return new BoundFunction(function, body);
+        }
+
+        private BoundBlock BindBlock(Block block) =>
+            new([.. block.Statements.Select(BindStatement)]);
 
         private BoundStatement BindStatement(Statement statement) => statement switch
         {
             ExpressionStatement s => new BoundExpressionStatement(BindExpression(s.Expression)),
             VariableDeclaration d => BindVariableDeclaration(d),
             AssignmentStatement a => BindAssignment(a),
+            ReturnStatement r => BindReturn(r),
             _ => throw new UnreachableException(),
         };
+
+        private BoundReturnStatement BindReturn(ReturnStatement statement)
+        {
+            var value = statement.Value is { } expression ? BindExpression(expression) : null;
+            var function = _currentFunction!; // statements are only bound inside BindFunction
+            var expected = function.ReturnType;
+
+            if (expected == TypeSymbol.ErrorType || value?.Type == TypeSymbol.ErrorType)
+            {
+                // The signature or the value already had an error.
+            }
+            else if (expected == TypeSymbol.UnitType)
+            {
+                if (value is not null && value.Type != TypeSymbol.UnitType)
+                {
+                    Error(
+                        DiagnosticCodes.ReturnValueInUnitFunction,
+                        $"cannot return a value from '{function.Name}' because it returns '()'",
+                        statement.Value!.Span);
+                }
+            }
+            else if (value is null)
+            {
+                Error(DiagnosticCodes.MissingReturnValue, $"'{function.Name}' must return a value of type '{expected}'", statement.Span);
+            }
+            else if (value.Type != expected)
+            {
+                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{expected}'", statement.Value!.Span);
+            }
+
+            return new BoundReturnStatement(value);
+        }
 
         private BoundVariableDeclaration BindVariableDeclaration(VariableDeclaration declaration)
         {

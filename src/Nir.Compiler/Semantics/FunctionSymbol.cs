@@ -23,9 +23,11 @@ public sealed class BuiltinFunctionSymbol(
     public MethodInfo Method { get; } = method;
 }
 
-/// <summary>A function declared in Nir source.</summary>
-public sealed class UserFunctionSymbol(FunctionDeclaration declaration)
-    : FunctionSymbol(declaration.Name.Text, TypeSymbol.UnitType, [])
+/// <summary>A function declared in Nir source. Its parameters are immutable variables of the function body.</summary>
+public sealed class UserFunctionSymbol(FunctionDeclaration declaration, TypeSymbol returnType, ImmutableArray<VariableSymbol> parameters)
+    : FunctionSymbol(declaration.Name.Text, returnType, [.. parameters.Select(p => p.Type)])
 {
     public FunctionDeclaration Declaration { get; } = declaration;
+
+    public ImmutableArray<VariableSymbol> Parameters { get; } = parameters;
 }

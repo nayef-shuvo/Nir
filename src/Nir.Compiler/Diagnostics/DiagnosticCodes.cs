@@ -30,6 +30,9 @@ public static class DiagnosticCodes
     /// <summary>A type annotation that names no type.</summary>
     public const string UnknownType = "NIR2006";
 
+    /// <summary><c>main</c> declared with parameters or a return type.</summary>
+    public const string InvalidEntryPoint = "NIR2007";
+
     /// <summary>A value of one type used where another type is required.</summary>
     public const string TypeMismatch = "NIR3001";
 
@@ -44,6 +47,15 @@ public static class DiagnosticCodes
 
     /// <summary>A variable whose initializer has no value, so it would have type <c>()</c>.</summary>
     public const string UnitVariable = "NIR3005";
+
+    /// <summary>A function that must return a value but does not end with a return.</summary>
+    public const string MissingReturn = "NIR3007";
+
+    /// <summary><c>return value</c> in a function that returns <c>()</c>.</summary>
+    public const string ReturnValueInUnitFunction = "NIR3008";
+
+    /// <summary>A bare <c>return</c> in a function that must return a value.</summary>
+    public const string MissingReturnValue = "NIR3009";
 
     /// <summary>No overload of a function accepts the given argument types.</summary>
     public const string NoMatchingOverload = "NIR3006";

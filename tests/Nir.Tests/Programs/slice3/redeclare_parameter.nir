@@ -1,0 +1,6 @@
+fn f(x: int) {
+    let x = 1
+}
+
+fn main() {
+}

@@ -15,6 +15,9 @@ public abstract record BoundStatement : BoundNode;
 
 public sealed record BoundExpressionStatement(BoundExpression Expression) : BoundStatement;
 
+/// <summary><paramref name="Value"/> is null for a bare <c>return</c> in a function that returns <c>()</c>.</summary>
+public sealed record BoundReturnStatement(BoundExpression? Value) : BoundStatement;
+
 public sealed record BoundVariableDeclaration(VariableSymbol Variable, BoundExpression Initializer) : BoundStatement;
 
 public sealed record BoundAssignment(VariableSymbol Variable, BoundExpression Value) : BoundStatement;

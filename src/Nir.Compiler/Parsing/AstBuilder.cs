@@ -26,8 +26,25 @@ internal sealed class AstBuilder(SourceText source)
     {
         var name = BuildIdentifier(context.name);
         var body = BuildBlock(context.body);
+        if (name is null || body is null)
+        {
+            return null;
+        }
 
-        return name is null || body is null ? null : new FunctionDeclaration(name, body, SpanOf(context));
+        var parameters = (context.parameterList()?.parameter() ?? [])
+            .Select(BuildParameter)
+            .OfType<Parameter>()
+            .ToImmutableArray();
+
+        return new FunctionDeclaration(name, parameters, BuildIdentifier(context.returnType), body, SpanOf(context));
+    }
+
+    private static Parameter? BuildParameter(NirParser.ParameterContext context)
+    {
+        var name = BuildIdentifier(context.name);
+        var type = BuildIdentifier(context.type);
+
+        return name is null || type is null ? null : new Parameter(name, type, SpanOf(context));
     }
 
     private Block? BuildBlock(NirParser.BlockContext? context)
@@ -56,6 +73,11 @@ internal sealed class AstBuilder(SourceText source)
         if (context.assignmentStatement() is { } assignment)
         {
             return BuildAssignment(assignment);
+        }
+
+        if (context.returnStatement() is { } returnStatement)
+        {
+            return new ReturnStatement(BuildExpression(returnStatement.value), SpanOf(returnStatement));
         }
 
         var expression = BuildExpression(context.expression());

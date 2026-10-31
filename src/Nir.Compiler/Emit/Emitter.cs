@@ -31,13 +31,18 @@ public static class Emitter
                 function.Symbol.Name,
                 MethodAttributes.Public | MethodAttributes.Static,
                 function.Symbol.ReturnType.ClrType,
-                Type.EmptyTypes));
+                [.. function.Symbol.ParameterTypes.Select(t => t.ClrType)]));
 
         foreach (var function in program.Functions)
         {
             var il = methods[function.Symbol].GetILGenerator();
-            new BodyEmitter(il, methods).EmitBlock(function.Body);
-            il.Emit(OpCodes.Ret);
+            new BodyEmitter(il, methods, function.Symbol).EmitBlock(function.Body);
+
+            // A function that returns a value ends with its own `return` (the binder guarantees it).
+            if (function.Symbol.ReturnType == TypeSymbol.UnitType)
+            {
+                il.Emit(OpCodes.Ret);
+            }
         }
 
         type.CreateType();
@@ -61,9 +66,13 @@ public static class Emitter
     }
 
     /// <summary>Emits the body of one function. Holds the state that belongs to a single function: its local variables.</summary>
-    private sealed class BodyEmitter(ILGenerator il, Dictionary<UserFunctionSymbol, MethodBuilder> methods)
+    private sealed class BodyEmitter(ILGenerator il, Dictionary<UserFunctionSymbol, MethodBuilder> methods, UserFunctionSymbol function)
     {
         private readonly Dictionary<VariableSymbol, LocalBuilder> _locals = [];
+
+        // Parameters are never assigned, so they are read straight from their argument slot.
+        private readonly Dictionary<VariableSymbol, short> _arguments =
+            function.Parameters.Select((parameter, index) => (parameter, index)).ToDictionary(p => p.parameter, p => (short)p.index);
 
         public void EmitBlock(BoundBlock block)
         {
@@ -84,6 +93,15 @@ public static class Emitter
                         il.Emit(OpCodes.Pop);
                     }
 
+                    break;
+
+                case BoundReturnStatement returnStatement:
+                    if (returnStatement.Value is { } value)
+                    {
+                        EmitExpression(value);
+                    }
+
+                    il.Emit(OpCodes.Ret);
                     break;
 
                 case BoundVariableDeclaration declaration:
@@ -121,6 +139,10 @@ public static class Emitter
 
                 case BoundBoolLiteral b:
                     il.Emit(b.Value ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                    break;
+
+                case BoundVariableExpression variable when _arguments.TryGetValue(variable.Variable, out var index):
+                    il.Emit(OpCodes.Ldarg, index);
                     break;
 
                 case BoundVariableExpression variable:

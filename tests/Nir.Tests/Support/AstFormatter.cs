@@ -27,7 +27,8 @@ internal static class AstFormatter
     private static string Describe(SyntaxNode node) => node switch
     {
         CompilationUnit => "CompilationUnit",
-        FunctionDeclaration f => $"FunctionDeclaration {f.Name.Text}",
+        FunctionDeclaration f => $"FunctionDeclaration {f.Name.Text}{Signature(f)}",
+        ReturnStatement => "Return",
         Block => "Block",
         ExpressionStatement => "ExpressionStatement",
         CallExpression c => $"CallExpression {c.Callee.Text}",
@@ -44,6 +45,17 @@ internal static class AstFormatter
         _ => throw new UnreachableException(),
     };
 
+    // `(a: int, b: int) -> int`; nothing at all for a function without parameters and return type.
+    private static string Signature(FunctionDeclaration function)
+    {
+        var parameters = function.Parameters.Length == 0
+            ? string.Empty
+            : "(" + string.Join(", ", function.Parameters.Select(p => $"{p.Name.Text}: {p.Type.Text}")) + ")";
+        var returnType = function.ReturnType is { } type ? " -> " + type.Text : string.Empty;
+
+        return parameters + returnType;
+    }
+
     private static IEnumerable<SyntaxNode> Children(SyntaxNode node) => node switch
     {
         CompilationUnit u => u.Functions,
@@ -51,6 +63,7 @@ internal static class AstFormatter
         Block b => b.Statements,
         ExpressionStatement s => [s.Expression],
         CallExpression c => c.Arguments,
+        ReturnStatement r => r.Value is { } value ? [value] : [],
         VariableDeclaration d => [d.Initializer],
         AssignmentStatement a => [a.Value],
         NameExpression => [],

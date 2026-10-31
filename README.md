@@ -8,7 +8,8 @@ fn main() {
 }
 ```
 
-Status: early development. Slice 1 works: functions, calls and string output. The language design is in
+Status: early development. Works today: functions with parameters and results, `let` / `let mut`, `int`, `double`,
+`bool` and `string`, arithmetic and comparisons, and `print`. The language design is in
 `docs/design.md`, and the plan is in `docs/roadmap.md`. Coding agents and contributors: read `CLAUDE.md` first.
 
 ## Requirements

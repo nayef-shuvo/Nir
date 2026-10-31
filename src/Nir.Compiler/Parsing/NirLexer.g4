@@ -12,9 +12,11 @@ options {
 FN: 'fn';
 LET: 'let';
 MUT: 'mut';
+RETURN: 'return';
 TRUE: 'true';
 FALSE: 'false';
 
+ARROW: '->';
 EQEQ: '==';
 NEQ: '!=';
 LE: '<=';

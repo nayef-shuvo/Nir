@@ -1,0 +1,9 @@
+fn twice(n: int) -> int {
+    let mut total = n
+    total = total + n
+    return total
+}
+
+fn main() {
+    print(twice(6))
+}

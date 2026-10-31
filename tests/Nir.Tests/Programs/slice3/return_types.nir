@@ -1,0 +1,22 @@
+fn i() -> int {
+    return 7
+}
+
+fn d() -> double {
+    return 2.5
+}
+
+fn b() -> bool {
+    return true
+}
+
+fn s() -> string {
+    return "text"
+}
+
+fn main() {
+    print(i())
+    print(d())
+    print(b())
+    print(s())
+}

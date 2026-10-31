@@ -17,7 +17,16 @@ compilationUnit
     ;
 
 functionDeclaration
-    : FN name=IDENTIFIER LPAREN RPAREN body=block
+    : FN name=IDENTIFIER LPAREN parameterList? RPAREN (ARROW returnType=IDENTIFIER)? body=block
+    ;
+
+// A trailing comma is optional. Types are plain identifiers; which names are types is decided by the binder.
+parameterList
+    : parameter (COMMA parameter)* COMMA?
+    ;
+
+parameter
+    : name=IDENTIFIER COLON type=IDENTIFIER
     ;
 
 block
@@ -31,7 +40,12 @@ statementList
 statement
     : variableDeclaration
     | assignmentStatement
+    | returnStatement
     | expression
+    ;
+
+returnStatement
+    : RETURN value=expression?
     ;
 
 // A type annotation is a plain identifier; which names are types is decided by the binder.

@@ -1,0 +1,10 @@
+fn noisy() -> int {
+    print("noisy")
+    return 5
+}
+
+fn main() {
+    noisy()
+    let x = noisy()
+    print(x)
+}

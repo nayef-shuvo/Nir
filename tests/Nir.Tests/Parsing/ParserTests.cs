@@ -457,4 +457,107 @@ public class ParserTests
         Assert.NotNull(unit);
         Assert.Contains(diagnostics, d => d.Code == DiagnosticCodes.SyntaxError);
     }
+
+    [Fact]
+    public void Function_with_parameters_and_return_type()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              FunctionDeclaration add(a: int, b: int) -> int
+                Block
+                  Return
+                    Binary +
+                      Name a
+                      Name b
+            """,
+            Tree("fn add(a: int, b: int) -> int {\n    return a + b\n}"));
+    }
+
+    [Fact]
+    public void Parameter_list_may_end_with_a_comma()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              FunctionDeclaration f(a: int, b: bool)
+                Block
+            """,
+            Tree("fn f(a: int, b: bool,) {}"));
+    }
+
+    [Fact]
+    public void Parameters_may_span_several_lines()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              FunctionDeclaration f(a: int, b: bool)
+                Block
+            """,
+            Tree("fn f(\n    a: int,\n    b: bool\n) {}"));
+    }
+
+    [Fact]
+    public void Return_without_a_type_means_no_return_type()
+    {
+        var (unit, _) = Parse("fn f() {}");
+
+        Assert.Null(unit.Functions[0].ReturnType);
+        Assert.Empty(unit.Functions[0].Parameters);
+    }
+
+    [Fact]
+    public void Bare_return_followed_by_a_statement()
+    {
+        Assert.Equal(
+            """
+            Return
+            ExpressionStatement
+              CallExpression print
+                IntLiteral 1
+            """,
+            StatementTree("return\nprint(1)"));
+    }
+
+    [Fact]
+    public void Return_with_a_value()
+    {
+        Assert.Equal(
+            """
+            Return
+              Binary *
+                IntLiteral 2
+                Name x
+            """,
+            StatementTree("return 2 * x"));
+    }
+
+    [Fact]
+    public void Parameter_and_return_spans()
+    {
+        const string text = "fn f(a: int) -> int { return a }";
+        var (unit, _) = Parse(text);
+
+        var function = unit.Functions[0];
+        Assert.Equal(new TextSpan(5, 6), function.Parameters[0].Span);
+        Assert.Equal(new TextSpan(5, 1), function.Parameters[0].Name.Span);
+        Assert.Equal(new TextSpan(8, 3), function.Parameters[0].Type.Span);
+        Assert.Equal("int", function.ReturnType!.Text);
+        Assert.Equal(new TextSpan(22, 8), function.Body.Statements[0].Span);
+    }
+
+    [Theory]
+    [InlineData("fn f(a) {}")]
+    [InlineData("fn f(a: ) {}")]
+    [InlineData("fn f(: int) {}")]
+    [InlineData("fn f() -> {}")]
+    [InlineData("fn f(a: int b: int) {}")]
+    public void Broken_signatures_report_NIR1001_and_still_return_a_tree(string source)
+    {
+        var (unit, diagnostics) = Parse(source);
+
+        Assert.NotNull(unit);
+        Assert.Contains(diagnostics, d => d.Code == DiagnosticCodes.SyntaxError);
+    }
 }
