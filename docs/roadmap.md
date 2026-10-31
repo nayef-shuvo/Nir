@@ -645,8 +645,7 @@ set of missing BCL-interop features.
 ## Backlog (not scheduled; do not start without being asked)
 
 - `nir dump tokens|ast|bound <file>` debug commands (the old repo had token and AST printers to copy ideas from).
-- Better syntax errors: stop one mistake from producing several (decide: report only the first syntax error, or
-  suppress the ones that follow on the same line).
+- Better syntax errors: once the parser recovers well (for example a hand-written one), report more than the first.
 - Short per-code labels for the text beside the carets (rustc says "not found in this scope" there and the full message
   in the header); today the label repeats the message.
 - `--color=always|never|auto` flag (today: `NO_COLOR` and `CLICOLOR_FORCE` environment variables).

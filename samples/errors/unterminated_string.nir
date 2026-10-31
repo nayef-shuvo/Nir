@@ -1,5 +1,5 @@
-// Expect: NIR0002 "unterminated string literal" at the opening quote on line 4, then a knock-on
-// NIR1001 because the string swallowed the closing `)`.
+// Expect: one NIR0002 "unterminated string literal" at the opening quote on line 4. Only the first
+// syntax error is reported, so the missing `)` it causes is not.
 fn main() {
     print("this string never ends)
 }

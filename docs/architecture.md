@@ -187,7 +187,9 @@ public static class SyntaxParser
 ```
 
 `Parse` always returns a `CompilationUnit`, even for broken input (possibly with fewer members). It never throws for
-bad input.
+bad input. It reports **only the first** lexical or syntax problem of the file (the one with the smallest position): the
+parser's recovery guesses what the user meant, and every guess after the first mistake is usually wrong. A hand-written
+parser could later report more.
 
 **ANTLR setup.** One project holds both grammars, so no copy tricks are needed. In `Nir.Compiler.csproj`:
 - `PackageReference Antlr4.Runtime.Standard 4.13.1` and `Antlr4BuildTasks 12.14.0`.

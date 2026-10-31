@@ -749,4 +749,42 @@ public class ParserTests
         Assert.NotNull(unit);
         Assert.Contains(diagnostics, d => d.Code == DiagnosticCodes.SyntaxError);
     }
+
+    [Fact]
+    public void Only_the_first_syntax_error_is_reported()
+    {
+        var (_, diagnostics) = Parse("fn a( {\n    print(\"x\")\n}\nfn b( {\n}\n");
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal((1, 7), diagnostic.Source.GetLineAndColumn(diagnostic.Span.Start));
+    }
+
+    [Fact]
+    public void A_lexical_error_and_the_parse_error_after_it_give_one_diagnostic()
+    {
+        var (_, diagnostics) = Parse("fn main() {\n    let x = 5 @ 3\n}");
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(DiagnosticCodes.UnexpectedCharacter, diagnostic.Code);
+    }
+
+    [Fact]
+    public void An_unterminated_string_gives_one_diagnostic()
+    {
+        var (_, diagnostics) = Parse("fn main() {\n    print(\"never ends)\n}");
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(DiagnosticCodes.UnterminatedString, diagnostic.Code);
+    }
+
+    [Fact]
+    public void The_earliest_problem_wins_even_if_a_later_one_is_found_first()
+    {
+        // The parse error at `)` comes before the stray `@`, though the lexer may reach the `@` first.
+        var (_, diagnostics) = Parse("fn main() { print(1 + ) @ }");
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(DiagnosticCodes.SyntaxError, diagnostic.Code);
+    }
 }
+

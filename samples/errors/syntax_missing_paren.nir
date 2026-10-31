@@ -1,5 +1,4 @@
-// Expect: NIR1001 at the `{` on line 3 (the real mistake: the `)` is missing).
-// Further NIR1001 lines are knock-on errors from the parser recovering badly.
+// Expect: one NIR1001 at the `{` on line 2 (the `)` is missing). Only the first syntax error is reported.
 fn main( {
     print("hello")
 }
