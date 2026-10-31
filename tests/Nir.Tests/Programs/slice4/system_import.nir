@@ -1,0 +1,5 @@
+using clr::cs::System
+
+fn main() {
+    print(System::Math::Sqrt(9.0))
+}

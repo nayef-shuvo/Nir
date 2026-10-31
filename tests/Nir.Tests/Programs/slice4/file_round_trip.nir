@@ -1,0 +1,10 @@
+using clr::cs::System::IO
+
+fn main() {
+    let path = IO::Path::Combine(IO::Path::GetTempPath(), "nir-golden-slice4-roundtrip.txt")
+    IO::File::WriteAllText(path, "stored text")
+    print(IO::File::Exists(path))
+    print(IO::File::ReadAllText(path))
+    IO::File::Delete(path)
+    print(IO::File::Exists(path))
+}

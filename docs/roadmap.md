@@ -511,19 +511,105 @@ groups. `::` path expressions. Calls to **static** methods of BCL types. Type ma
 an error (no implicit conversions). Instance method calls on values (`"abc".ToUpper()`), via `.`, are included.
 Not included: constructors, generics, properties, events, extension methods, `ref`/`out` parameters.
 
-**How types are found (design this task first, then record it in `architecture.md`):** resolve `clr::cs::A::B::T` by
-loading the runtime's reference/implementation assemblies (start with `System.Runtime`, `System.Console`,
-`System.Private.CoreLib` and the assemblies of the shared framework) and looking up the type `A.B.T`. Prefer
-`System.Reflection.MetadataLoadContext` so the compiler does not execute BCL code and is not coupled to its own
-runtime; fall back to plain reflection only if `MetadataLoadContext` is not viable, and say so in `decisions.md`.
+**Decision (spike done 2026-11-01, D-042):** types are found with `System.Reflection.MetadataLoadContext` (NuGet
+`System.Reflection.MetadataLoadContext` 10.0.0), not plain reflection. The spike showed that lookup and emit both work,
+and that **every CLR type used while emitting must come from the load context**. Mixing in the compiler's own runtime
+types (`typeof(void)`, `typeof(int)`) makes the program fail to start ("Entry point must have a return type of void").
+So `TypeSymbol.ClrType`, the built-in `print` methods and the emitter's core assembly all come from one process-wide
+`ClrUniverse`.
 
-**New diagnostics.** namespace or type not found under `clr::cs`; type has no member `{name}`; no matching overload.
+**Details fixed for this slice:**
+- Syntax. Keyword `using`; tokens `COLONCOLON` (`::`) and `DOT` (`.`). `using clr::cs::System::IO` or a group
+  `using clr::cs::System::{Math, Console}` (a multi-line group needs a trailing comma, because `{}` is not depth-tracked).
+  `using` lines may appear anywhere at the top level and apply to the whole file. A call target is a qualified name
+  `IO::File::ReadAllText(p)`; a method call on a value is `receiver.Method(args)`, which binds tighter than unary `-`.
+  A line cannot start with `.` to continue the previous line (the newline already ended the statement).
+- AST: `UsingDirective(Path, Members)` (`Members` is empty unless a group is used), `QualifiedName(Parts)` (with a `Text`
+  property such as `IO::File::ReadAllText`), `CallExpression` now has a `QualifiedName` callee, `MemberCallExpression
+  (Receiver, Method, Arguments)`. `CompilationUnit` gains `Usings`.
+- Imports. The path must start `clr::cs` followed by at least one segment: `NIR2008` otherwise (at the first segment).
+  The rest, joined with `.`, must name a public top-level type or a namespace in the runtime's framework assemblies:
+  `NIR2009` `'{name}' was not found` (at the last segment). The local name is the last segment; importing the same local
+  name twice is `NIR2010` `'{name}' is already imported` (the first import wins).
+- Qualified calls. The first segment must be an imported name (otherwise `NIR2001`). Middle segments walk namespaces to
+  a type; the last segment is a static method of that type. A segment that does not exist, or a method that is not a
+  public static method (or a namespace where a type is needed), is `NIR2011` `'{member}' is not a member of '{container}'`
+  at that segment. Nested types are not supported.
+- Overloads. Only overloads whose parameter types are all Nir types count (`int`, `double`, `bool`, `string`;
+  generic methods, `ref`/`out`, arrays and everything else are skipped). Choice is by exact argument types. No overload
+  with that argument count is `NIR2004`; the right count but no exact match is `NIR3006` (at the call start). If the
+  chosen method's return type is not `void`, `int`, `double`, `bool` or `string`, the call is `NIR3011`
+  `'{method}' returns '{type}', which Nir cannot use yet`.
+- Instance calls. The receiver's Nir type maps to `System.String`, `Int32`, `Double` or `Boolean`; the method is a
+  public instance method of that type with the same overload rules. A method that is not there is `NIR2011`. A receiver
+  of a value type (`42.ToString()`) is stored in a temporary and called by address; a `string` receiver uses `callvirt`.
+- Emit: `ClrMethodSymbol` replaces `BuiltinFunctionSymbol` (a `print` overload is just a `ClrMethodSymbol`). A static
+  method is `call`; an instance method evaluates the receiver first, then the arguments.
+- Thread safety. The load context is shared by the whole process, so `NirCompiler.Compile` and `Emit` take one global
+  lock. (Tests run in parallel.)
+- Out of scope: constructors, generics, properties and fields, events, extension methods, `ref`/`out`, nested types, the
+  `System.Linq` extension-method import form.
 
-**Decisions required:** none beyond the design (all locked in design sections 8 and 9). The overload and loading
-strategy is a technical decision to record in `decisions.md`.
+**New diagnostics.** `NIR2008` `imports must name a namespace or type under 'clr::cs'`; `NIR2009` `'{name}' was not found`; `NIR2010`
+`'{name}' is already imported`; `NIR2011` `'{member}' is not a member of '{container}'`; `NIR3011`
+`'{method}' returns '{type}', which Nir cannot use yet`. `NIR2001`, `NIR2004`, `NIR3006` are reused.
 
-**Acceptance programs** (`Programs/slice4/`): `Math::Sqrt`, `Math::Max` on ints, string instance methods, file write
-then read through a temp path, `Environment`-free output; errors for unknown namespace, unknown member, wrong argument type.
+**Acceptance programs** (`Programs/slice4/`): `Math::Sqrt`, `Math::Max` on ints and on doubles, `Math::Pow`; string
+instance methods and a chain (`"  hi ".Trim().ToUpper()`); `42.ToString()`; `Int32::Parse("42")`; `String::Concat`;
+`Console::WriteLine` through a group import; a file written, read back and deleted through a temp path; errors for a bad
+import root, an unknown namespace/type, a duplicate import, an unimported name, an unknown member, a wrong argument type,
+a wrong argument count, an unknown instance method, and a method with an unsupported return type.
+
+### Tasks
+
+- [x] **T4.0 The .NET type universe (refactor, no new language feature)**
+  - Add the `System.Reflection.MetadataLoadContext` 10.0.0 package. New folder `Clr/` with `ClrUniverse` (internal,
+    static): one `MetadataLoadContext` over every `*.dll` in `RuntimeEnvironment.GetRuntimeDirectory()`, core assembly
+    `System.Private.CoreLib`; `CoreAssembly`; `FindType(fullName)`; `NamespaceExists(name)`; and `ToNirType(Type)` /
+    mapping by full name. The type and namespace index is built once, lazily, by reading each file's metadata tables
+    with `System.Reflection.Metadata` (public top-level type definitions only; native files with no metadata are
+    skipped), so no assembly is loaded just to be indexed.
+  - `TypeSymbol.ClrType` values come from the universe. `Emitter` uses `ClrUniverse.CoreAssembly` for the
+    `PersistedAssemblyBuilder`. Introduce `ClrMethodSymbol` and rebuild the `print` overloads from the universe.
+    `NirCompiler.Compile` and `Emit` take the global lock. Add `Clr` to the dependency rules in `architecture.md` and
+    `ArchitectureTests` (Clr depends on nothing in Nir; Semantics and Emit may use it).
+  - Tests: `ClrUniverseTests` (finds `System.Math`, `System.IO.File`, `System.Console`; does not find `System.Nope`;
+    `System` and `System.IO` are namespaces; `System.IO.File` is not; mapping of the five CLR types; an unmappable type
+    gives null). **All existing tests must still pass.**
+  - **Done when:** the whole suite is green and `architecture.md` section 8/9 describes the universe.
+
+- [x] **T4.1 Syntax**
+  - Tokens, grammar rules (`topLevelItem`, `usingDirective`, `importPath`, `importGroup`, `qualifiedName`, the member-call
+    alternative), AST nodes, `AstBuilder`; update the lexer test that expected `1.` to report `NIR0001` (it now lexes
+    `INT_LITERAL` then `DOT`).
+  - Tests: lexer (`::` vs `:`, `.` after identifiers/strings/literals, keyword `using`); parser trees for a plain
+    import, a group import with and without a trailing comma, a qualified call, a member call, a chain
+    (`"a".Trim().ToUpper()`), precedence of `-"a".Length`-style unary vs member call (`-x.F()` is `-(x.F())`), a member
+    call on a literal (`42.ToString()`), spans; syntax errors (`using`, `using a::`, `using a::{}`, `x.`, `x.F`, `a::()`)
+    report `NIR1001` without throwing.
+  - **Done when:** these pass.
+
+- [x] **T4.2 Imports and static calls**
+  - Binder: import table with `NIR2008` to `NIR2010`; qualified-call resolution; shared overload selection for
+    `print` and CLR methods; `NIR2011`, `NIR3011`; `ClrMethodSymbol` for found methods.
+  - Emitter: static CLR calls.
+  - Tests: binder positions for every code; overloads (`Math.Max` int vs double, `Math.Abs`); a mappable overload is chosen
+    when unmappable ones exist (`Path.Combine`); end-to-end runs (`Math::Sqrt`, `Int32::Parse`, `String::Concat`,
+    `IO::Path::GetFileName`, file round trip, group import with `Console::WriteLine`).
+  - **Done when:** these pass.
+
+- [x] **T4.3 Instance method calls**
+  - Binder and emitter for `MemberCallExpression`: string, int, double and bool receivers, value-type receivers by
+    address, chained calls.
+  - Tests: `"abc".ToUpper()`, `"  hi ".Trim().ToUpper()`, `"abc".Contains("b")`, `"abc".Substring(1)`, `42.ToString()`,
+    `2.5.ToString()`, `true.ToString()`, a receiver that is a variable, a call result as a receiver, errors (unknown
+    method `NIR2011`, wrong argument type `NIR3006`, error-typed receiver adds nothing).
+  - **Done when:** these pass.
+
+- [x] **T4.4 Program tests and docs**
+  - `Programs/slice4/` golden programs for the acceptance list and `Slice4ProgramTests`; update `architecture.md`
+    (sections 3, 4, 5, 6, 7, 8, 9), tick tasks, update `CLAUDE.md`, append decisions.
+  - **Done when:** all acceptance items pass, `dotnet build` has 0 warnings, `dotnet test` is green.
 
 ---
 

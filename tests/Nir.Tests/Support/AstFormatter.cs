@@ -27,6 +27,8 @@ internal static class AstFormatter
     private static string Describe(SyntaxNode node) => node switch
     {
         CompilationUnit => "CompilationUnit",
+        UsingDirective u => "Using " + string.Join("::", u.Path.Select(p => p.Text)) + Group(u),
+        MemberCallExpression m => $"MemberCall {m.Method.Text}",
         FunctionDeclaration f => $"FunctionDeclaration {f.Name.Text}{Signature(f)}",
         ReturnStatement => "Return",
         Block => "Block",
@@ -45,6 +47,10 @@ internal static class AstFormatter
         _ => throw new UnreachableException(),
     };
 
+    // `::{Math, Console}` for a group import; nothing for a plain one.
+    private static string Group(UsingDirective directive) =>
+        directive.Members.Length == 0 ? string.Empty : "::{" + string.Join(", ", directive.Members.Select(m => m.Text)) + "}";
+
     // `(a: int, b: int) -> int`; nothing at all for a function without parameters and return type.
     private static string Signature(FunctionDeclaration function)
     {
@@ -58,7 +64,9 @@ internal static class AstFormatter
 
     private static IEnumerable<SyntaxNode> Children(SyntaxNode node) => node switch
     {
-        CompilationUnit u => u.Functions,
+        CompilationUnit u => u.Usings.Cast<SyntaxNode>().Concat(u.Functions),
+        UsingDirective => [],
+        MemberCallExpression m => [m.Receiver, .. m.Arguments],
         FunctionDeclaration f => [f.Body],
         Block b => b.Statements,
         ExpressionStatement s => [s.Expression],

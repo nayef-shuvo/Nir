@@ -1,3 +1,4 @@
+using Nir.Compiler.Clr;
 using Nir.Compiler.Diagnostics;
 using Nir.Compiler.Emit;
 using Nir.Compiler.Parsing;
@@ -18,16 +19,19 @@ public static class NirCompiler
     /// <summary>Parses and binds <paramref name="source"/>. Stops after the first phase that reports an error.</summary>
     public static CompilationResult Compile(SourceText source)
     {
-        var diagnostics = new DiagnosticBag();
-
-        var unit = SyntaxParser.Parse(source, diagnostics);
-        if (diagnostics.HasErrors)
+        lock (ClrUniverse.Gate)
         {
-            return new CompilationResult(null, diagnostics);
-        }
+            var diagnostics = new DiagnosticBag();
 
-        var program = Binder.Bind(unit, source, diagnostics);
-        return new CompilationResult(program, diagnostics);
+            var unit = SyntaxParser.Parse(source, diagnostics);
+            if (diagnostics.HasErrors)
+            {
+                return new CompilationResult(null, diagnostics);
+            }
+
+            var program = Binder.Bind(unit, source, diagnostics);
+            return new CompilationResult(program, diagnostics);
+        }
     }
 
     /// <summary>Writes the assembly and its runtimeconfig. <paramref name="result"/> must have succeeded.</summary>
@@ -38,6 +42,9 @@ public static class NirCompiler
             throw new InvalidOperationException("Cannot emit a compilation that has errors.");
         }
 
-        Emitter.Emit(program, assemblyName, outputDirectory);
+        lock (ClrUniverse.Gate)
+        {
+            Emitter.Emit(program, assemblyName, outputDirectory);
+        }
     }
 }

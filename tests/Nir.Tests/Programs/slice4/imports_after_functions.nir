@@ -1,0 +1,5 @@
+fn main() {
+    print(Math::Sqrt(25.0))
+}
+
+using clr::cs::System::Math

@@ -1,0 +1,4 @@
+using clr::cs::System::Nope
+
+fn main() {
+}

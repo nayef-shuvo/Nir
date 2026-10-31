@@ -16,10 +16,11 @@ public class ArchitectureTests
     private static readonly Dictionary<string, string[]> _allowed = new()
     {
         [Root + ".Diagnostics"] = [],
+        [Root + ".Clr"] = [],
         [Root + ".Syntax"] = [Root + ".Diagnostics"],
         [Root + ".Parsing"] = [Root + ".Syntax", Root + ".Diagnostics"],
-        [Root + ".Semantics"] = [Root + ".Syntax", Root + ".Diagnostics"],
-        [Root + ".Emit"] = [Root + ".Semantics", Root + ".Diagnostics"],
+        [Root + ".Semantics"] = [Root + ".Syntax", Root + ".Diagnostics", Root + ".Clr"],
+        [Root + ".Emit"] = [Root + ".Semantics", Root + ".Diagnostics", Root + ".Clr"],
     };
 
     [Fact]

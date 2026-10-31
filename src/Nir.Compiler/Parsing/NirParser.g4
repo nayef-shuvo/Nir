@@ -13,7 +13,30 @@ terminator
     ;
 
 compilationUnit
-    : terminator? (functionDeclaration (terminator functionDeclaration)*)? terminator? EOF
+    : terminator? (topLevelItem (terminator topLevelItem)*)? terminator? EOF
+    ;
+
+topLevelItem
+    : usingDirective
+    | functionDeclaration
+    ;
+
+// `using clr::cs::System::IO` imports one name; `using clr::cs::System::{Math, Console}` imports several.
+// A multi-line group needs a trailing comma (see NirLexerBase: braces are not depth-tracked).
+usingDirective
+    : USING importPath
+    ;
+
+importPath
+    : IDENTIFIER (COLONCOLON IDENTIFIER)* (COLONCOLON importGroup)?
+    ;
+
+importGroup
+    : LBRACE IDENTIFIER (COMMA IDENTIFIER)* COMMA? RBRACE
+    ;
+
+qualifiedName
+    : IDENTIFIER (COLONCOLON IDENTIFIER)*
     ;
 
 functionDeclaration
@@ -60,7 +83,8 @@ assignmentStatement
 // Alternatives are listed from highest to lowest precedence (ANTLR's rule for left-recursive rules), and all
 // binary operators are left-associative.
 expression
-    : op=MINUS operand=expression                                       # unaryExpression
+    : receiver=expression DOT method=IDENTIFIER LPAREN argumentList? RPAREN  # memberCallExpression
+    | op=MINUS operand=expression                                       # unaryExpression
     | left=expression op=(STAR | SLASH | PERCENT) right=expression      # multiplicativeExpression
     | left=expression op=(PLUS | MINUS) right=expression                # additiveExpression
     | left=expression op=(LT | LE | GT | GE) right=expression           # relationalExpression
@@ -76,7 +100,7 @@ expression
     ;
 
 callExpression
-    : callee=IDENTIFIER LPAREN argumentList? RPAREN
+    : callee=qualifiedName LPAREN argumentList? RPAREN
     ;
 
 // A trailing comma is optional.

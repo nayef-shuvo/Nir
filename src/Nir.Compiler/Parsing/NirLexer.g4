@@ -13,6 +13,7 @@ FN: 'fn';
 LET: 'let';
 MUT: 'mut';
 RETURN: 'return';
+USING: 'using';
 TRUE: 'true';
 FALSE: 'false';
 
@@ -29,7 +30,9 @@ STAR: '*';
 SLASH: '/';
 PERCENT: '%';
 
+COLONCOLON: '::';
 COLON: ':';
+DOT: '.';
 EQ: '=';
 COMMA: ',';
 LBRACE: '{';

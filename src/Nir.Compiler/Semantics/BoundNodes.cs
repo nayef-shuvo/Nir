@@ -27,6 +27,10 @@ public abstract record BoundExpression(TypeSymbol Type) : BoundNode;
 public sealed record BoundCallExpression(FunctionSymbol Target, ImmutableArray<BoundExpression> Arguments)
     : BoundExpression(Target.ReturnType);
 
+/// <summary>A method called on a value: <c>receiver.Method(arguments)</c>. The receiver is evaluated first.</summary>
+public sealed record BoundMemberCallExpression(BoundExpression Receiver, ClrMethodSymbol Target, ImmutableArray<BoundExpression> Arguments)
+    : BoundExpression(Target.ReturnType);
+
 public sealed record BoundStringLiteral(string Value) : BoundExpression(TypeSymbol.StringType);
 
 public sealed record BoundVariableExpression(VariableSymbol Variable) : BoundExpression(Variable.Type);

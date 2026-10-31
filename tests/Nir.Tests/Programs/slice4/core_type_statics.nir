@@ -1,0 +1,7 @@
+using clr::cs::System::{Int32, String}
+
+fn main() {
+    print(Int32::Parse("42") + 1)
+    print(String::Concat("a", "b"))
+    print(String::IsNullOrEmpty(""))
+}

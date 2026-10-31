@@ -5,7 +5,11 @@ namespace Nir.Compiler.Syntax;
 
 public abstract record Expression(TextSpan Span) : SyntaxNode(Span);
 
-public sealed record CallExpression(Identifier Callee, ImmutableArray<Expression> Arguments, TextSpan Span) : Expression(Span);
+public sealed record CallExpression(QualifiedName Callee, ImmutableArray<Expression> Arguments, TextSpan Span) : Expression(Span);
+
+/// <summary><c>receiver.Method(arguments)</c>: a method called on a value.</summary>
+public sealed record MemberCallExpression(Expression Receiver, Identifier Method, ImmutableArray<Expression> Arguments, TextSpan Span)
+    : Expression(Span);
 
 /// <summary>A use of a variable by name.</summary>
 public sealed record NameExpression(Identifier Name, TextSpan Span) : Expression(Span);

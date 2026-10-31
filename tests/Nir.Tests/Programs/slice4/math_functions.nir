@@ -1,0 +1,9 @@
+using clr::cs::System::Math
+
+fn main() {
+    print(Math::Sqrt(16.0))
+    print(Math::Max(3, 7))
+    print(Math::Max(2.5, 1.5))
+    print(Math::Pow(2.0, 10.0))
+    print(Math::Abs(-5))
+}

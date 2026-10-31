@@ -38,6 +38,7 @@ Nir2/
 ├── src/
 │   ├── Nir.Compiler/           the whole compiler, one project
 │   │   ├── Diagnostics/
+│   │   ├── Clr/                ClrUniverse: the .NET types the compiler can see
 │   │   ├── Parsing/            *.g4, NirLexerBase.cs, AstBuilder.cs, ParserErrorListener.cs, SyntaxParser.cs
 │   │   ├── Syntax/             AST records
 │   │   ├── Semantics/          Binder, symbols, types, bound tree
@@ -61,11 +62,11 @@ The CLI is `Nir.Cli`. Tests are `Nir.Tests.<Folder>`.
 
 ## 3. Dependency rules
 
-- `Diagnostics` depends on nothing.
+- `Diagnostics` and `Clr` depend on nothing in Nir.
 - `Syntax` depends on `Diagnostics` (for `TextSpan`) only.
 - `Parsing` depends on `Syntax`, `Diagnostics`, and ANTLR.
-- `Semantics` depends on `Syntax`, `Diagnostics`. Never on `Parsing`.
-- `Emit` depends on `Semantics`, `Diagnostics`. Never on `Syntax` or `Parsing`.
+- `Semantics` depends on `Syntax`, `Diagnostics`, `Clr`. Never on `Parsing`.
+- `Emit` depends on `Semantics`, `Diagnostics`, `Clr`. Never on `Syntax` or `Parsing`.
 - `Nir.Cli` depends on `Nir.Compiler` through `NirCompiler` and `Diagnostics` types only.
 
 **ANTLR boundary.** ANTLR generated classes (`NirLexer`, `NirParser`, contexts) are public because the generator makes
@@ -121,7 +122,7 @@ Codes are never reused or renumbered. Each code is a `public const string` in a 
 period, names in single quotes, say what is wrong, not what to do. Example: `'x' is not defined`,
 `cannot assign to 'x' because it is not mutable`.
 
-Codes defined so far (slices 1 to 3):
+Codes defined so far (slices 1 to 4):
 
 | Code | Meaning | Message template |
 |---|---|---|
@@ -135,6 +136,10 @@ Codes defined so far (slices 1 to 3):
 | NIR2005 | name declared twice in one block | `'{name}' is already declared in this block` |
 | NIR2006 | unknown type in an annotation, parameter or return type | `unknown type '{name}'` |
 | NIR2007 | `main` with parameters or a return type | `'main' must have no parameters and no return type` |
+| NIR2008 | import not starting with `clr::cs` or naming nothing below it | `imports must name a namespace or type under 'clr::cs'` |
+| NIR2009 | imported namespace or type does not exist | `'{name}' was not found` |
+| NIR2010 | same local name imported twice | `'{name}' is already imported` |
+| NIR2011 | namespace, type or value has no such member | `'{member}' is not a member of '{container}'` |
 | NIR3001 | type mismatch | `cannot convert '{from}' to '{to}'` |
 | NIR3002 | assignment to a non-`mut` variable | `cannot assign to '{name}' because it is not mutable` |
 | NIR3003 | operator not defined for these types | `operator '{op}' cannot be applied to '{left}' and '{right}'` (unary: `... to '{type}'`) |
@@ -144,6 +149,7 @@ Codes defined so far (slices 1 to 3):
 | NIR3007 | function does not end with a return | `'{name}' does not return a value on every path` |
 | NIR3008 | `return value` in a `()` function | `cannot return a value from '{name}' because it returns '()'` |
 | NIR3009 | bare `return` in a value function | `'{name}' must return a value of type '{type}'` |
+| NIR3011 | .NET method returns a type Nir cannot use yet | `'{method}' returns '{type}', which Nir cannot use yet` |
 
 ## 5. Parsing (`Nir.Compiler.Parsing`)
 
@@ -189,7 +195,11 @@ The newline logic was ported from `reference/NirLexerBase.cs`; do not redesign i
 file replaces the old single stashed `EOF`.
 
 **Keywords.** A keyword is added to the lexer grammar in the slice that first uses it. Keywords are listed before
-`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Keywords so far: `fn`, `let`, `mut`, `return`, `true`, `false`. `->` is the token `ARROW`.
+`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Keywords so far: `fn`, `let`, `mut`, `return`, `using`, `true`, `false`. `->` is `ARROW`, `::` is `COLONCOLON`, `.` is `DOT`.
+A `using` line is `USING importPath`, and the compilation unit is a list of `topLevelItem`s (a `using` or a function), so
+imports may appear anywhere at the top level. A call target is a `qualifiedName`; a method call on a value is the
+highest-precedence expression alternative (`receiver.Method(args)`). A line cannot start with `.` to continue the previous
+line: the newline already ended the statement.
 
 **Strings.** Plain strings use lexer modes: `STRING_START`, `STRING_TEXT`, `STRING_END`. The lexer keeps raw text;
 escape sequences are decoded by `AstBuilder` (from slice 5). In slice 1 a `StringLiteralExpression.Value` is the raw text
@@ -240,6 +250,10 @@ Slice 3 adds: `Parameter(Name, Type)` and `ReturnStatement(Value?)`, and `Functi
 `Parameters` and an optional `ReturnType` (null means the function returns `()`). Types are plain identifiers;
 the binder decides which names are types.
 
+Slice 4 adds: `UsingDirective(Path, Members)` (`Members` is empty unless a `{A, B}` group is used), `QualifiedName(Parts)`
+with a `Text` property joining the parts with `::`, and `MemberCallExpression(Receiver, Method, Arguments)`.
+`CallExpression.Callee` is now a `QualifiedName` and `CompilationUnit` has `Usings`.
+
 Later slices add nodes; they never change the meaning of existing ones. Each node type is created only by
 `AstBuilder`. `Span` covers the node's full source text, from its first token to its last.
 
@@ -279,6 +293,26 @@ Parameters are put in the function's single scope first, then the body's variabl
 parameter (`NIR2005`) or assign one (`NIR3002`). `BindReturn` checks the value against the function's return type. The
 "every path returns" rule is the simple one (D-038): a function whose return type is not `()` must have a
 `BoundReturnStatement` as the last statement of its body (`NIR3007`, reported at the function name).
+
+Slice 4 adds `ClrMethodSymbol` (replacing the old built-in symbol: a `print` overload is just one), `BoundMemberCallExpression
+(Receiver, Target, Arguments)`, and two internal helpers: `ClrCandidate` and `ClrMethods`, which list the public methods of
+a .NET type that Nir can call.
+
+**Imports.** `BindImports` runs before functions are declared. A path must start `clr::cs` and name something below it
+(`NIR2008`); the rest, joined with `.`, must be a public top-level type or a namespace of the framework (`NIR2009`). The
+local name is the last segment; a second import of the same name is `NIR2010` and the first wins. A group
+`using clr::cs::System::{A, B}` is the same as one `using` per member. Imports apply to the whole file, wherever they are.
+
+**Qualified calls** (`A::B::Method(args)`). The first part must be an imported name (else `NIR2001`). Middle parts walk
+namespaces down to a type. The last part is a public static method of that type. A missing part, a namespace where a type
+is needed, or a method that is not a public static member is `NIR2011` at that part. Nested types are not supported.
+
+**Calling .NET methods** (static and instance). Only methods whose parameters are all `int`, `double`, `bool` or `string`
+count as overloads (generic methods, `ref`/`out`, arrays and every other type are skipped). The overload is chosen by exact
+argument types; no overload with that argument count is `NIR2004`, the right count but no exact match is `NIR3006`. A chosen
+method whose return type is not `void`, `int`, `double`, `bool` or `string` is `NIR3011`. `receiver.Method(args)` uses the CLR
+type the receiver's Nir type stands for (`string` is `System.String`, and so on) and the public instance methods of it.
+`print` goes through the same routine, so it follows the same rules.
 
 **Error recovery.** `BindExpression` never returns null. A failed expression becomes `BoundErrorExpression` with
 `TypeSymbol.ErrorType`. Anything that receives an error-typed operand reports nothing more and yields an error type, so
@@ -355,6 +389,11 @@ Slice 2 additions to emit (`BodyEmitter`, a private class holding the per-functi
 - The generated runtimeconfig also sets `configProperties: {"System.Globalization.Invariant": true}` so numbers print
   the same on every machine (`2.5`, never `2,5`). `Console.WriteLine(true)` prints `True` (accepted output).
 
+Slice 4 emit additions: the `PersistedAssemblyBuilder` takes its core assembly from `ClrUniverse`, and every CLR type comes
+from the same source (`TypeSymbol.ClrType`, the `print` methods, the found methods). A static CLR call is `call`. A call on a
+value evaluates the receiver first; a value-type receiver (`int`, `double`, `bool`) is stored in a temporary and passed by
+address with `call`, a method declared on a reference type uses `callvirt` (a value-type receiver is boxed first).
+
 Emit never reports user errors. If something it cannot emit reaches it, that is a compiler bug: throw
 `InvalidOperationException` with a clear message.
 
@@ -380,6 +419,22 @@ Verified by the T1.1 spike on 2026-11-01 (SDK 10.0.114, runtime 10.0.14, Linux x
      `System.Text.Json` or string concatenation (`RuntimeConfigWriter`).
    - Directory.Build.props makes warnings errors; a throwaway project can opt out with
      `<TreatWarningsAsErrors>false</TreatWarningsAsErrors>`, the real compiler cannot.
+
+Verified by the slice 4 spike (2026-11-01), for `System.Reflection.MetadataLoadContext` 10.0.0:
+
+6. A `MetadataLoadContext` over every `*.dll` in `RuntimeEnvironment.GetRuntimeDirectory()`, with core assembly
+   `System.Private.CoreLib`, finds framework types and methods, and `PersistedAssemblyBuilder` accepts its types and methods:
+   the program reads a file, calls an instance method and `Math.Sqrt`, and runs.
+7. **Every CLR type used while emitting must come from the load context.** Using the compiler's own `typeof(void)` for the
+   entry point's return type made the program fail to start ("Entry point must have a return type of void, integer, or
+   unsigned integer"). So `ClrUniverse` is the only source of CLR types: `TypeSymbol`, the built-in `print` methods and the
+   found methods all use it. Never write `typeof(...)` for a type that reaches the emitter.
+8. The types are found without loading every assembly: `ClrUniverse` reads each file's metadata tables with
+   `System.Reflection.Metadata` to index public top-level types and namespaces, then loads only the assembly that defines a
+   type it is asked for. The emitted program references the implementation assemblies (for example `System.Private.CoreLib`,
+   `System.Console`), which is fine for same-machine runs.
+9. The load context is not assumed to be thread safe, so `NirCompiler.Compile` and `Emit` hold one process-wide lock
+   (`ClrUniverse.Gate`). Tests run in parallel and shared the context without trouble under that lock.
 
 ## 10. Public facade (`Nir.Compiler.NirCompiler`)
 

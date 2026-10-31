@@ -1,0 +1,5 @@
+using clr::cs::System::Math
+
+fn main() {
+    Math::Nope(1)
+}

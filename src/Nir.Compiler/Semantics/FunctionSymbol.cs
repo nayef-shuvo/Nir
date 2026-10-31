@@ -13,8 +13,8 @@ public abstract class FunctionSymbol(string name, TypeSymbol returnType, Immutab
     public ImmutableArray<TypeSymbol> ParameterTypes { get; } = parameterTypes;
 }
 
-/// <summary>A function provided by the compiler, implemented by a CLR method (for example <c>print</c>).</summary>
-public sealed class BuiltinFunctionSymbol(
+/// <summary>A function implemented by a CLR method: a built-in such as <c>print</c>, or a method of a .NET type.</summary>
+public sealed class ClrMethodSymbol(
     string name,
     MethodInfo method,
     TypeSymbol returnType,

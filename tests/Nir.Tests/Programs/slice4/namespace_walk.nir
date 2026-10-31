@@ -1,0 +1,6 @@
+using clr::cs::System::IO
+
+fn main() {
+    print(IO::Path::GetFileName("dir/file.txt"))
+    print(IO::Path::GetExtension("dir/file.txt"))
+}

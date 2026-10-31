@@ -1,0 +1,7 @@
+fn main() {
+    print("hello".ToUpper())
+    print("abc".Contains("b"))
+    print("abcdef".Substring(2))
+    print("abc".IndexOf("c"))
+    print("a-b-c".Replace("-", "+"))
+}

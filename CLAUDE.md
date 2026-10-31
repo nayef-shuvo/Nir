@@ -19,10 +19,11 @@ Update this block whenever a task is completed.
 - Slice 1 (hello world): **done** (T1.0 to T1.9, 83 tests green, committed on `main`).
 - Slice 2 (bindings and arithmetic): **done** (T2.0 to T2.4, 203 tests green).
 - Slice 3 (functions with parameters and results): **done** (T3.0 to T3.3, 281 tests green).
-- Next: **slice 4 (first C# interop)**. It has no task list yet: write tasks `T4.0`... in `docs/roadmap.md` in the
-  format of the earlier slices, then start. Its technical choice (how .NET types are found, ideally with
-  `MetadataLoadContext`) is recorded in `decisions.md` when made. Open for slice 5: whether nested blocks may redeclare
-  outer names (design.md "Scopes").
+- Slice 4 (first C# interop): **done** (T4.0 to T4.4, 430 tests green). .NET types are found through
+  `Clr/ClrUniverse` (a `MetadataLoadContext`); never use `typeof(...)` for a type that reaches the emitter.
+- Next: **slice 5 (control flow and strings)**. It has no task list yet: first ask the user its "Decisions required"
+  (range end exclusive or not, `while`, boolean operator spelling, conversion syntax, nested-block redeclaration), record
+  the answers, write tasks `T5.0`... in `docs/roadmap.md`, then start.
 
 ## How to pick up work
 

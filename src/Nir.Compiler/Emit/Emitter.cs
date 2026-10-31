@@ -4,6 +4,7 @@ using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using Nir.Compiler.Clr;
 using Nir.Compiler.Semantics;
 
 namespace Nir.Compiler.Emit;
@@ -19,7 +20,7 @@ public static class Emitter
     {
         Directory.CreateDirectory(outputDirectory);
 
-        var assemblyBuilder = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), typeof(object).Assembly);
+        var assemblyBuilder = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), ClrUniverse.CoreAssembly);
         var module = assemblyBuilder.DefineDynamicModule(assemblyName);
 
         // Temporary naming: one class holding every function. Changes when modules arrive (slice 10).
@@ -159,6 +160,10 @@ public static class Emitter
                     EmitBinaryOperator(binary.Operator, isDouble: binary.Left.Type == TypeSymbol.DoubleType);
                     break;
 
+                case BoundMemberCallExpression member:
+                    EmitMemberCall(member);
+                    break;
+
                 case BoundCallExpression call:
                     foreach (var argument in call.Arguments)
                     {
@@ -167,8 +172,8 @@ public static class Emitter
 
                     switch (call.Target)
                     {
-                        case BuiltinFunctionSymbol builtin:
-                            il.Emit(OpCodes.Call, builtin.Method);
+                        case ClrMethodSymbol clrMethod:
+                            il.Emit(OpCodes.Call, clrMethod.Method);
                             break;
                         case UserFunctionSymbol user:
                             il.Emit(OpCodes.Call, methods[user]);
@@ -182,6 +187,38 @@ public static class Emitter
                 default:
                     throw new UnreachableException();
             }
+        }
+
+        // The receiver comes first. A value-type receiver (int, double, bool) must be passed by address, so it goes through
+        // a temporary; if the method is declared on a reference type (such as Object) the value is boxed instead.
+        private void EmitMemberCall(BoundMemberCallExpression call)
+        {
+            EmitExpression(call.Receiver);
+
+            var method = call.Target.Method;
+            var receiverClrType = call.Receiver.Type.ClrType;
+            var useCall = false;
+            if (receiverClrType.IsValueType)
+            {
+                if (method.DeclaringType is { IsValueType: true })
+                {
+                    var temporary = il.DeclareLocal(receiverClrType);
+                    il.Emit(OpCodes.Stloc, temporary);
+                    il.Emit(OpCodes.Ldloca, temporary);
+                    useCall = true;
+                }
+                else
+                {
+                    il.Emit(OpCodes.Box, receiverClrType);
+                }
+            }
+
+            foreach (var argument in call.Arguments)
+            {
+                EmitExpression(argument);
+            }
+
+            il.Emit(useCall ? OpCodes.Call : OpCodes.Callvirt, method);
         }
 
         // Negation of an int is 0 - x so that int.MinValue overflows (throws) like the other checked operations.

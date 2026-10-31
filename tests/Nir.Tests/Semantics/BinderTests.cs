@@ -113,7 +113,7 @@ public class BinderTests
         var (program, _) = Bind("fn main() {\n    print(\"hi\")\n}");
 
         var call = Assert.IsType<BoundCallExpression>(Assert.IsType<BoundExpressionStatement>(Assert.Single(program!.Functions[0].Body.Statements)).Expression);
-        Assert.IsType<BuiltinFunctionSymbol>(call.Target);
+        Assert.IsType<ClrMethodSymbol>(call.Target);
     }
 
     [Fact]

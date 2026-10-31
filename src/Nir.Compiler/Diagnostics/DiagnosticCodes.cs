@@ -33,6 +33,18 @@ public static class DiagnosticCodes
     /// <summary><c>main</c> declared with parameters or a return type.</summary>
     public const string InvalidEntryPoint = "NIR2007";
 
+    /// <summary>An import that does not start with <c>clr::cs</c> or names nothing below it.</summary>
+    public const string InvalidImport = "NIR2008";
+
+    /// <summary>An import of a namespace or type that does not exist.</summary>
+    public const string ImportNotFound = "NIR2009";
+
+    /// <summary>The same local name imported twice.</summary>
+    public const string DuplicateImport = "NIR2010";
+
+    /// <summary>A name after <c>::</c> or <c>.</c> that the namespace, type or value does not have.</summary>
+    public const string NoSuchMember = "NIR2011";
+
     /// <summary>A value of one type used where another type is required.</summary>
     public const string TypeMismatch = "NIR3001";
 
@@ -56,6 +68,9 @@ public static class DiagnosticCodes
 
     /// <summary>A bare <c>return</c> in a function that must return a value.</summary>
     public const string MissingReturnValue = "NIR3009";
+
+    /// <summary>A .NET method whose return type Nir cannot use yet.</summary>
+    public const string UnsupportedClrType = "NIR3011";
 
     /// <summary>No overload of a function accepts the given argument types.</summary>
     public const string NoMatchingOverload = "NIR3006";

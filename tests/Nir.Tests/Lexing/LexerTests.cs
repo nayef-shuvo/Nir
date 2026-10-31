@@ -153,13 +153,12 @@ public class LexerTests
     }
 
     [Fact]
-    public void Digits_then_dot_without_digit_is_not_a_double()
+    public void Digits_then_dot_without_digit_is_an_int_then_a_dot()
     {
         var (tokens, diagnostics) = TokenFormatter.Lex("1.");
 
-        Assert.Equal(["INT_LITERAL '1'", "SEMI ''", "EOF"], tokens);
-        var diagnostic = Assert.Single(diagnostics);
-        Assert.Equal(DiagnosticCodes.UnexpectedCharacter, diagnostic.Code);
+        Assert.Equal(["INT_LITERAL '1'", "DOT '.'", "EOF"], tokens);
+        Assert.Empty(diagnostics);
     }
 
     [Theory]
@@ -257,5 +256,36 @@ public class LexerTests
         Assert.Equal(
             "FN IDENTIFIER LPAREN IDENTIFIER COLON IDENTIFIER COMMA IDENTIFIER COLON IDENTIFIER RPAREN ARROW IDENTIFIER LBRACE RBRACE SEMI EOF",
             TokenFormatter.Names("fn add(a: int, b: int) -> int {}"));
+    }
+
+    [Fact]
+    public void Colon_colon_is_one_token_and_colon_stays_one()
+    {
+        Assert.Equal("IDENTIFIER COLONCOLON IDENTIFIER SEMI EOF", TokenFormatter.Names("a::b"));
+        Assert.Equal("IDENTIFIER COLON COLON IDENTIFIER SEMI EOF", TokenFormatter.Names("a: :b"));
+        Assert.Equal("IDENTIFIER COLON IDENTIFIER SEMI EOF", TokenFormatter.Names("a:b"));
+    }
+
+    [Fact]
+    public void Using_is_a_keyword()
+    {
+        Assert.Equal("USING IDENTIFIER SEMI EOF", TokenFormatter.Names("using x"));
+        Assert.Equal("IDENTIFIER SEMI EOF", TokenFormatter.Names("usingx"));
+    }
+
+    [Fact]
+    public void Dot_after_a_string_an_identifier_and_an_int()
+    {
+        Assert.Equal("STRING_START STRING_TEXT STRING_END DOT IDENTIFIER LPAREN RPAREN SEMI EOF", TokenFormatter.Names("\"a\".F()"));
+        Assert.Equal("IDENTIFIER DOT IDENTIFIER SEMI EOF", TokenFormatter.Names("x.y"));
+        Assert.Equal("INT_LITERAL DOT IDENTIFIER SEMI EOF", TokenFormatter.Names("42.ToString"));
+        Assert.Equal("DOUBLE_LITERAL DOT IDENTIFIER SEMI EOF", TokenFormatter.Names("2.5.ToString"));
+    }
+
+    [Fact]
+    public void Newline_after_dot_is_dropped_but_newline_before_it_ends_the_statement()
+    {
+        Assert.Equal("IDENTIFIER DOT IDENTIFIER SEMI EOF", TokenFormatter.Names("x.\ny"));
+        Assert.Equal("IDENTIFIER SEMI DOT IDENTIFIER SEMI EOF", TokenFormatter.Names("x\n.y"));
     }
 }

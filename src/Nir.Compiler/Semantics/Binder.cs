@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
+using Nir.Compiler.Clr;
 using Nir.Compiler.Diagnostics;
 using Nir.Compiler.Syntax;
 
@@ -17,11 +18,14 @@ public static class Binder
     {
         private readonly Dictionary<string, UserFunctionSymbol> _functions = [];
         private Dictionary<string, VariableSymbol> _variables = [];
+        private readonly Dictionary<string, ImportedName> _imports = [];
         private UserFunctionSymbol? _currentFunction;
         private bool _hadError;
 
         public BoundProgram? Bind(CompilationUnit unit)
         {
+            BindImports(unit.Usings);
+
             // Pass 1: declare every function, so a call may come before the declaration.
             foreach (var declaration in unit.Functions)
             {
@@ -228,6 +232,7 @@ public static class Binder
             DoubleLiteralExpression d => BindDoubleLiteral(d),
             BoolLiteralExpression b => new BoundBoolLiteral(b.Value),
             CallExpression c => BindCall(c),
+            MemberCallExpression m => BindMemberCall(m),
             NameExpression n => BindName(n),
             ParenthesizedExpression p => BindExpression(p.Inner),
             UnaryExpression u => BindUnary(u),
@@ -352,26 +357,32 @@ public static class Binder
         {
             var arguments = call.Arguments.Select(BindExpression).ToImmutableArray();
 
-            if (_functions.TryGetValue(call.Callee.Text, out var user))
+            if (call.Callee.Parts.Length > 1)
+            {
+                return BindQualifiedCall(call, arguments);
+            }
+
+            var name = call.Callee.Text;
+            if (_functions.TryGetValue(name, out var user))
             {
                 return BindUserCall(call, user, arguments);
             }
 
-            var overloads = BuiltinFunctions.GetOverloads(call.Callee.Text);
+            var overloads = BuiltinFunctions.GetOverloads(name);
             if (overloads.IsEmpty)
             {
-                Error(DiagnosticCodes.UndefinedName, $"'{call.Callee.Text}' is not defined", call.Callee.Span);
+                Error(DiagnosticCodes.UndefinedName, $"'{name}' is not defined", call.Callee.Span);
                 return new BoundErrorExpression();
             }
 
-            return BindBuiltinCall(call, overloads, arguments);
+            return BindClrCall(call.Span, name, name, [.. overloads.Select(ClrCandidate.From)], arguments);
         }
 
         private BoundExpression BindUserCall(CallExpression call, UserFunctionSymbol target, ImmutableArray<BoundExpression> arguments)
         {
             if (arguments.Length != target.ParameterTypes.Length)
             {
-                ReportWrongArgumentCount(call, target, arguments.Length);
+                ReportWrongArgumentCount(call.Span, target.Name, target.ParameterTypes.Length, arguments.Length);
                 return new BoundErrorExpression();
             }
 
@@ -388,35 +399,210 @@ public static class Binder
             return new BoundCallExpression(target, arguments);
         }
 
-        private BoundExpression BindBuiltinCall(CallExpression call, ImmutableArray<BuiltinFunctionSymbol> overloads, ImmutableArray<BoundExpression> arguments)
+        // `A::B::Method(args)`: the first part must be an imported name; the parts in between walk namespaces down to a
+        // type; the last part is a static method of that type.
+        private BoundExpression BindQualifiedCall(CallExpression call, ImmutableArray<BoundExpression> arguments)
         {
-            var sameArity = overloads.Where(o => o.ParameterTypes.Length == arguments.Length).ToList();
-            if (sameArity.Count == 0)
+            var parts = call.Callee.Parts;
+            if (!_imports.TryGetValue(parts[0].Text, out var current))
             {
-                ReportWrongArgumentCount(call, overloads[0], arguments.Length);
+                Error(DiagnosticCodes.UndefinedName, $"'{parts[0].Text}' is not defined", parts[0].Span);
                 return new BoundErrorExpression();
             }
 
-            var match = sameArity.FirstOrDefault(o => Accepts(o, arguments));
+            for (var i = 1; i < parts.Length - 1; i++)
+            {
+                var next = Descend(current, parts[i]);
+                if (next is null)
+                {
+                    return new BoundErrorExpression();
+                }
+
+                current = next;
+            }
+
+            var method = parts[^1];
+            if (current is not TypeName typeName)
+            {
+                Error(DiagnosticCodes.NoSuchMember, $"'{method.Text}' is not a member of '{current.FullName}'", method.Span);
+                return new BoundErrorExpression();
+            }
+
+            return BindClrMethod(call.Span, typeName.Type, method, isStatic: true, arguments);
+        }
+
+        // One step down a qualified name: a namespace contains namespaces and types; a type contains nothing we can name here.
+        private ImportedName? Descend(ImportedName current, Identifier part)
+        {
+            if (current is NamespaceName ns)
+            {
+                var fullName = ns.FullName + "." + part.Text;
+                if (ClrUniverse.FindType(fullName) is { } type)
+                {
+                    return new TypeName(type);
+                }
+
+                if (ClrUniverse.NamespaceExists(fullName))
+                {
+                    return new NamespaceName(fullName);
+                }
+            }
+
+            Error(DiagnosticCodes.NoSuchMember, $"'{part.Text}' is not a member of '{current.FullName}'", part.Span);
+            return null;
+        }
+
+        // Finds the method on a .NET type and binds the call, for both `Type::Method(...)` and `value.Method(...)`.
+        private BoundExpression BindClrMethod(TextSpan callSpan, Type type, Identifier method, bool isStatic, ImmutableArray<BoundExpression> arguments)
+        {
+            if (!ClrMethods.HasMethodNamed(type, method.Text, isStatic))
+            {
+                Error(DiagnosticCodes.NoSuchMember, $"'{method.Text}' is not a member of '{type.FullName}'", method.Span);
+                return new BoundErrorExpression();
+            }
+
+            var candidates = ClrMethods.FindCandidates(type, method.Text, isStatic);
+            return BindClrCall(callSpan, method.Text, $"{type.Name}.{method.Text}", candidates, arguments);
+        }
+
+        // Chooses the overload whose parameter types equal the argument types exactly (design.md: no implicit conversions).
+        private BoundExpression BindClrCall(
+            TextSpan callSpan,
+            string name,
+            string displayName,
+            IReadOnlyList<ClrCandidate> candidates,
+            ImmutableArray<BoundExpression> arguments) =>
+            ChooseClrMethod(callSpan, name, displayName, candidates, arguments) is { } symbol
+                ? new BoundCallExpression(symbol, arguments)
+                : new BoundErrorExpression();
+
+        // Reports the error and returns null if there is no usable overload.
+        private ClrMethodSymbol? ChooseClrMethod(
+            TextSpan callSpan,
+            string name,
+            string displayName,
+            IReadOnlyList<ClrCandidate> candidates,
+            ImmutableArray<BoundExpression> arguments)
+        {
+            var sameArity = candidates.Where(c => c.ParameterTypes.Length == arguments.Length).ToList();
+            if (candidates.Count > 0 && sameArity.Count == 0)
+            {
+                ReportWrongArgumentCount(callSpan, displayName, candidates[0].ParameterTypes.Length, arguments.Length);
+                return null;
+            }
+
+            var match = sameArity.FirstOrDefault(c => Accepts(c, arguments));
             if (match is null)
             {
                 var types = string.Join(", ", arguments.Select(a => a.Type));
-                Error(DiagnosticCodes.NoMatchingOverload, $"no overload of '{call.Callee.Text}' accepts ({types})", call.Span);
+                Error(DiagnosticCodes.NoMatchingOverload, $"no overload of '{displayName}' accepts ({types})", callSpan);
+                return null;
+            }
+
+            if (match.ReturnType is not { } returnType)
+            {
+                Error(
+                    DiagnosticCodes.UnsupportedClrType,
+                    $"'{displayName}' returns '{match.Method.ReturnType.FullName}', which Nir cannot use yet",
+                    callSpan);
+                return null;
+            }
+
+            return new ClrMethodSymbol(name, match.Method, returnType, match.ParameterTypes);
+        }
+
+        // `receiver.Method(args)`: the method of the .NET type that the receiver's Nir type stands for.
+        private BoundExpression BindMemberCall(MemberCallExpression call)
+        {
+            var receiver = BindExpression(call.Receiver);
+            var arguments = call.Arguments.Select(BindExpression).ToImmutableArray();
+            if (receiver.Type == TypeSymbol.ErrorType)
+            {
                 return new BoundErrorExpression();
             }
 
-            return new BoundCallExpression(match, arguments);
+            var typeName = receiver.Type.Name;
+            if (receiver.Type == TypeSymbol.UnitType || !ClrMethods.HasMethodNamed(receiver.Type.ClrType, call.Method.Text, isStatic: false))
+            {
+                Error(DiagnosticCodes.NoSuchMember, $"'{call.Method.Text}' is not a member of '{typeName}'", call.Method.Span);
+                return new BoundErrorExpression();
+            }
+
+            var candidates = ClrMethods.FindCandidates(receiver.Type.ClrType, call.Method.Text, isStatic: false);
+            return ChooseClrMethod(call.Span, call.Method.Text, $"{typeName}.{call.Method.Text}", candidates, arguments) is { } symbol
+                ? new BoundMemberCallExpression(receiver, symbol, arguments)
+                : new BoundErrorExpression();
         }
 
         // An error-typed argument fits any parameter: its own error is already reported.
-        private static bool Accepts(FunctionSymbol function, ImmutableArray<BoundExpression> arguments) =>
-            arguments.Select((argument, i) => argument.Type == TypeSymbol.ErrorType || argument.Type == function.ParameterTypes[i]).All(fits => fits);
+        private static bool Accepts(ClrCandidate candidate, ImmutableArray<BoundExpression> arguments) =>
+            arguments.Select((argument, i) => argument.Type == TypeSymbol.ErrorType || argument.Type == candidate.ParameterTypes[i]).All(fits => fits);
 
-        private void ReportWrongArgumentCount(CallExpression call, FunctionSymbol target, int actual) =>
-            Error(
-                DiagnosticCodes.WrongArgumentCount,
-                $"'{target.Name}' expects {target.ParameterTypes.Length} argument(s) but got {actual}",
-                call.Span);
+        private void ReportWrongArgumentCount(TextSpan callSpan, string name, int expected, int actual) =>
+            Error(DiagnosticCodes.WrongArgumentCount, $"'{name}' expects {expected} argument(s) but got {actual}", callSpan);
+
+        // `using clr::cs::System::IO` and `using clr::cs::System::{Math, Console}` introduce local names.
+        private void BindImports(ImmutableArray<UsingDirective> usings)
+        {
+            foreach (var directive in usings)
+            {
+                var path = directive.Path;
+                if (path.Length < 2 || path[0].Text != "clr" || path[1].Text != "cs")
+                {
+                    Error(DiagnosticCodes.InvalidImport, "imports must name a namespace or type under 'clr::cs'", path[0].Span);
+                    continue;
+                }
+
+                if (directive.Members.IsEmpty)
+                {
+                    Import(path);
+                    continue;
+                }
+
+                foreach (var member in directive.Members)
+                {
+                    Import([.. path, member]);
+                }
+            }
+        }
+
+        private void Import(ImmutableArray<Identifier> path)
+        {
+            var alias = path[^1];
+            if (path.Length < 3)
+            {
+                Error(DiagnosticCodes.InvalidImport, "imports must name a namespace or type under 'clr::cs'", path[0].Span);
+                return;
+            }
+
+            var fullName = string.Join('.', path.Skip(2).Select(part => part.Text));
+            ImportedName imported;
+            if (ClrUniverse.FindType(fullName) is { } type)
+            {
+                imported = new TypeName(type);
+            }
+            else if (ClrUniverse.NamespaceExists(fullName))
+            {
+                imported = new NamespaceName(fullName);
+            }
+            else
+            {
+                Error(DiagnosticCodes.ImportNotFound, $"'{fullName}' was not found", alias.Span);
+                return;
+            }
+
+            if (!_imports.TryAdd(alias.Text, imported))
+            {
+                Error(DiagnosticCodes.DuplicateImport, $"'{alias.Text}' is already imported", alias.Span);
+            }
+        }
+
+        /// <summary>What a <c>using</c> introduced: a .NET namespace or a .NET type.</summary>
+        private abstract record ImportedName(string FullName);
+
+        private sealed record NamespaceName(string FullName) : ImportedName(FullName);
+
+        private sealed record TypeName(Type Type) : ImportedName(Type.FullName ?? Type.Name);
 
         private void Error(string code, string message, TextSpan span)
         {

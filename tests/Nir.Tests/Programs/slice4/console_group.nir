@@ -1,0 +1,7 @@
+using clr::cs::System::{Console, Math}
+
+fn main() {
+    Console::WriteLine("through Console")
+    Console::WriteLine(5)
+    Console::WriteLine(Math::Sqrt(4.0))
+}

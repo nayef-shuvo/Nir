@@ -560,4 +560,193 @@ public class ParserTests
         Assert.NotNull(unit);
         Assert.Contains(diagnostics, d => d.Code == DiagnosticCodes.SyntaxError);
     }
+
+    [Fact]
+    public void Plain_import()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              Using clr::cs::System::IO
+              FunctionDeclaration main
+                Block
+            """,
+            Tree("using clr::cs::System::IO\nfn main() {}"));
+    }
+
+    [Fact]
+    public void Group_import()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              Using clr::cs::System::{Math, Console}
+            """,
+            Tree("using clr::cs::System::{Math, Console}"));
+    }
+
+    [Fact]
+    public void Group_import_over_several_lines_with_a_trailing_comma()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              Using clr::cs::System::{Math, Console}
+              FunctionDeclaration main
+                Block
+            """,
+            Tree("using clr::cs::System::{\n    Math,\n    Console,\n}\nfn main() {}"));
+    }
+
+    [Fact]
+    public void Imports_may_come_after_functions()
+    {
+        Assert.Equal(
+            """
+            CompilationUnit
+              Using clr::cs::System::Math
+              FunctionDeclaration main
+                Block
+            """,
+            Tree("fn main() {}\nusing clr::cs::System::Math"));
+    }
+
+    [Fact]
+    public void Several_imports()
+    {
+        var (unit, diagnostics) = Parse("using clr::cs::System::Math\nusing clr::cs::System::IO\n");
+
+        Assert.Empty(diagnostics);
+        Assert.Equal(2, unit.Usings.Length);
+        Assert.Equal(["clr", "cs", "System", "IO"], unit.Usings[1].Path.Select(p => p.Text));
+    }
+
+    [Fact]
+    public void Using_directive_spans()
+    {
+        var (unit, _) = Parse("using clr::cs::System::{Math}");
+
+        var directive = unit.Usings[0];
+        Assert.Equal(new TextSpan(0, 29), directive.Span);
+        Assert.Equal(new TextSpan(24, 4), directive.Members[0].Span);
+    }
+
+    [Fact]
+    public void Qualified_call()
+    {
+        Assert.Equal(
+            """
+            CallExpression IO::File::ReadAllText
+              Name p
+            """,
+            ExpressionTree("IO::File::ReadAllText(p)"));
+    }
+
+    [Fact]
+    public void Qualified_call_span_and_parts()
+    {
+        var (unit, _) = Parse("fn main() { A::B::C(1) }");
+
+        var call = (CallExpression)((ExpressionStatement)unit.Functions[0].Body.Statements[0]).Expression;
+        Assert.Equal(["A", "B", "C"], call.Callee.Parts.Select(p => p.Text));
+        Assert.Equal(new TextSpan(12, 7), call.Callee.Span);
+        Assert.Equal(new TextSpan(12, 10), call.Span);
+    }
+
+    [Fact]
+    public void Member_call_on_a_string()
+    {
+        Assert.Equal(
+            """
+            MemberCall ToUpper
+              StringLiteral "a"
+            """,
+            ExpressionTree("\"a\".ToUpper()"));
+    }
+
+    [Fact]
+    public void Member_calls_chain_from_left_to_right()
+    {
+        Assert.Equal(
+            """
+            MemberCall ToUpper
+              MemberCall Trim
+                StringLiteral "a"
+            """,
+            ExpressionTree("\"a\".Trim().ToUpper()"));
+    }
+
+    [Fact]
+    public void Member_call_with_arguments()
+    {
+        Assert.Equal(
+            """
+            MemberCall Replace
+              Name s
+              StringLiteral "a"
+              StringLiteral "b"
+            """,
+            ExpressionTree("s.Replace(\"a\", \"b\")"));
+    }
+
+    [Fact]
+    public void Member_call_binds_tighter_than_unary_minus()
+    {
+        Assert.Equal(
+            """
+            Unary -
+              MemberCall F
+                Name x
+            """,
+            ExpressionTree("-x.F()"));
+    }
+
+    [Fact]
+    public void Member_call_inside_an_operation()
+    {
+        Assert.Equal(
+            """
+            Binary +
+              MemberCall F
+                Name a
+              IntLiteral 1
+            """,
+            ExpressionTree("a.F() + 1"));
+    }
+
+    [Fact]
+    public void Member_call_on_numbers_and_on_a_call_result()
+    {
+        Assert.Equal("MemberCall ToString\n  IntLiteral 42", ExpressionTree("42.ToString()"));
+        Assert.Equal("MemberCall ToString\n  DoubleLiteral 2.5", ExpressionTree("2.5.ToString()"));
+        Assert.Equal("MemberCall G\n  CallExpression f", ExpressionTree("f().G()"));
+    }
+
+    [Fact]
+    public void Member_call_span_covers_receiver_and_arguments()
+    {
+        var (unit, _) = Parse("fn main() { print(\"a\".Trim()) }");
+
+        var print = (CallExpression)((ExpressionStatement)unit.Functions[0].Body.Statements[0]).Expression;
+        Assert.Equal(new TextSpan(18, 10), print.Arguments[0].Span);
+    }
+
+    [Theory]
+    [InlineData("using")]
+    [InlineData("using a::")]
+    [InlineData("using a::{}")]
+    [InlineData("using a::{b")]
+    [InlineData("using ::a")]
+    [InlineData("fn main() { x. }")]
+    [InlineData("fn main() { x.F }")]
+    [InlineData("fn main() { x.F( }")]
+    [InlineData("fn main() { a::() }")]
+    [InlineData("fn main() { a::b }")]
+    public void Broken_imports_and_calls_report_NIR1001_and_still_return_a_tree(string source)
+    {
+        var (unit, diagnostics) = Parse(source);
+
+        Assert.NotNull(unit);
+        Assert.Contains(diagnostics, d => d.Code == DiagnosticCodes.SyntaxError);
+    }
 }

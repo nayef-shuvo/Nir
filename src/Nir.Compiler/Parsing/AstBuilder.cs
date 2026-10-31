@@ -14,13 +14,39 @@ internal sealed class AstBuilder(SourceText source)
 {
     public CompilationUnit Build(NirParser.CompilationUnitContext context)
     {
-        var functions = context.functionDeclaration()
+        var items = context.topLevelItem();
+        var usings = items
+            .Select(item => item.usingDirective())
+            .OfType<NirParser.UsingDirectiveContext>()
+            .Select(BuildUsing)
+            .OfType<UsingDirective>()
+            .ToImmutableArray();
+        var functions = items
+            .Select(item => item.functionDeclaration())
+            .OfType<NirParser.FunctionDeclarationContext>()
             .Select(BuildFunction)
             .OfType<FunctionDeclaration>()
             .ToImmutableArray();
 
-        return new CompilationUnit(functions, new TextSpan(0, source.Text.Length));
+        return new CompilationUnit(usings, functions, new TextSpan(0, source.Text.Length));
     }
+
+    private static UsingDirective? BuildUsing(NirParser.UsingDirectiveContext context)
+    {
+        var path = context.importPath();
+        if (path is null)
+        {
+            return null;
+        }
+
+        var parts = BuildIdentifiers(path.IDENTIFIER());
+        var members = path.importGroup() is { } group ? BuildIdentifiers(group.IDENTIFIER()) : [];
+
+        return parts.IsEmpty ? null : new UsingDirective(parts, members, SpanOf(context));
+    }
+
+    private static ImmutableArray<Identifier> BuildIdentifiers(Antlr4.Runtime.Tree.ITerminalNode[] nodes) =>
+        [.. nodes.Select(node => BuildIdentifier(node.Symbol)).OfType<Identifier>()];
 
     private FunctionDeclaration? BuildFunction(NirParser.FunctionDeclarationContext context)
     {
@@ -107,6 +133,7 @@ internal sealed class AstBuilder(SourceText source)
     private Expression? BuildExpression(NirParser.ExpressionContext? context) => context switch
     {
         null => null,
+        NirParser.MemberCallExpressionContext m => BuildMemberCall(m),
         NirParser.UnaryExpressionContext u => BuildUnary(u),
         NirParser.MultiplicativeExpressionContext m => BuildBinary(m, m.left, m.op, m.right),
         NirParser.AdditiveExpressionContext a => BuildBinary(a, a.left, a.op, a.right),
@@ -158,20 +185,32 @@ internal sealed class AstBuilder(SourceText source)
         _ => throw new UnreachableException(),
     };
 
-    private CallExpression? BuildCall(NirParser.CallExpressionContext context)
+    private MemberCallExpression? BuildMemberCall(NirParser.MemberCallExpressionContext context)
     {
-        var callee = BuildIdentifier(context.callee);
-        if (callee is null)
+        var receiver = BuildExpression(context.receiver);
+        var method = BuildIdentifier(context.method);
+        if (receiver is null || method is null)
         {
             return null;
         }
 
-        var arguments = (context.argumentList()?.expression() ?? [])
-            .Select(BuildExpression)
-            .OfType<Expression>()
-            .ToImmutableArray();
+        return new MemberCallExpression(receiver, method, BuildArguments(context.argumentList()), SpanOf(context));
+    }
 
-        return new CallExpression(callee, arguments, SpanOf(context));
+    private ImmutableArray<Expression> BuildArguments(NirParser.ArgumentListContext? list) =>
+        [.. (list?.expression() ?? []).Select(BuildExpression).OfType<Expression>()];
+
+    private CallExpression? BuildCall(NirParser.CallExpressionContext context)
+    {
+        var parts = context.callee is { } name ? BuildIdentifiers(name.IDENTIFIER()) : [];
+        if (parts.IsEmpty)
+        {
+            return null;
+        }
+
+        var callee = new QualifiedName(parts, SpanOf(context.callee));
+
+        return new CallExpression(callee, BuildArguments(context.argumentList()), SpanOf(context));
     }
 
     private static StringLiteralExpression BuildStringLiteral(NirParser.StringLiteralContext context) =>

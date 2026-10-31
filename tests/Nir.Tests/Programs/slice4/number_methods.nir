@@ -1,0 +1,7 @@
+fn main() {
+    print(42.ToString())
+    print(2.5.ToString())
+    print(true.ToString())
+    print((1 + 2).ToString())
+    print(10.CompareTo(5))
+}

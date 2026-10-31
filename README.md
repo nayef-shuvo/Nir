@@ -9,7 +9,8 @@ fn main() {
 ```
 
 Status: early development. Works today: functions with parameters and results, `let` / `let mut`, `int`, `double`,
-`bool` and `string`, arithmetic and comparisons, and `print`. The language design is in
+`bool` and `string`, arithmetic and comparisons, `print`, and calls into the .NET libraries
+(`using clr::cs::System::Math` then `Math::Sqrt(16.0)`, or `"abc".ToUpper()`). The language design is in
 `docs/design.md`, and the plan is in `docs/roadmap.md`. Coding agents and contributors: read `CLAUDE.md` first.
 
 ## Requirements

@@ -1,0 +1,3 @@
+fn main() {
+    Math::Sqrt(4.0)
+}

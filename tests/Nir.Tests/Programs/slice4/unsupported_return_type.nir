@@ -1,0 +1,5 @@
+using clr::cs::System::IO
+
+fn main() {
+    IO::File::ReadAllBytes("x")
+}
