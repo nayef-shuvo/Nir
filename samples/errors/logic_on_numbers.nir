@@ -1,0 +1,4 @@
+// Expect: NIR3003 "operator '&&' cannot be applied to 'int' and 'int'" on line 3. && and || work on bool only.
+fn main() {
+    print(1 && 2)
+}

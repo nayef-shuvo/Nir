@@ -17,7 +17,8 @@ public static class Binder
     private sealed class ProgramBinder(SourceText source, DiagnosticBag diagnostics)
     {
         private readonly Dictionary<string, UserFunctionSymbol> _functions = [];
-        private Dictionary<string, VariableSymbol> _variables = [];
+        private ScopeStack _scopes = new();
+        private int _loopDepth;
         private readonly Dictionary<string, ImportedName> _imports = [];
         private UserFunctionSymbol? _currentFunction;
         private bool _hadError;
@@ -83,26 +84,21 @@ public static class Binder
         private BoundFunction BindFunction(UserFunctionSymbol function)
         {
             _currentFunction = function;
-            _variables = [];
+            _scopes = new ScopeStack();
+            _loopDepth = 0;
 
+            // The parameters and the function body share one scope (design.md "Scopes").
+            _scopes.Push();
             var declaration = function.Declaration;
             for (var i = 0; i < function.Parameters.Length; i++)
             {
-                var parameter = function.Parameters[i];
-                if (_variables.ContainsKey(parameter.Name))
-                {
-                    Error(DiagnosticCodes.AlreadyDeclared, $"'{parameter.Name}' is already declared in this block", declaration.Parameters[i].Name.Span);
-                }
-                else
-                {
-                    _variables[parameter.Name] = parameter;
-                }
+                Declare(function.Parameters[i], declaration.Parameters[i].Name);
             }
 
-            var body = BindBlock(declaration.Body);
+            var body = BindStatements(declaration.Body);
 
             var mustReturn = function.ReturnType != TypeSymbol.UnitType && function.ReturnType != TypeSymbol.ErrorType;
-            if (mustReturn && body.Statements.LastOrDefault() is not BoundReturnStatement)
+            if (mustReturn && !BoundFlow.AlwaysReturns(body))
             {
                 Error(DiagnosticCodes.MissingReturn, $"'{function.Name}' does not return a value on every path", declaration.Name.Span);
             }
@@ -110,8 +106,34 @@ public static class Binder
             return new BoundFunction(function, body);
         }
 
-        private BoundBlock BindBlock(Block block) =>
+        // A nested block: its own scope, which ends with the block.
+        private BoundBlock BindBlock(Block block)
+        {
+            _scopes.Push();
+            var bound = BindStatements(block);
+            _scopes.Pop();
+            return bound;
+        }
+
+        private BoundBlock BindStatements(Block block) =>
             new([.. block.Statements.Select(BindStatement)]);
+
+        // Adds the variable to the current scope, or reports that the name is taken (here, or in a block around this one).
+        private void Declare(VariableSymbol variable, Identifier at)
+        {
+            if (_scopes.InCurrentScope(variable.Name))
+            {
+                Error(DiagnosticCodes.AlreadyDeclared, $"'{variable.Name}' is already declared in this block", at.Span);
+            }
+            else if (_scopes.TryGet(variable.Name, out _))
+            {
+                Error(DiagnosticCodes.AlreadyDeclared, $"'{variable.Name}' is already declared in an enclosing block", at.Span);
+            }
+            else
+            {
+                _scopes.Add(variable);
+            }
+        }
 
         private BoundStatement BindStatement(Statement statement) => statement switch
         {
@@ -119,8 +141,93 @@ public static class Binder
             VariableDeclaration d => BindVariableDeclaration(d),
             AssignmentStatement a => BindAssignment(a),
             ReturnStatement r => BindReturn(r),
+            IfStatement i => BindIf(i),
+            WhileStatement w => BindWhile(w),
+            ForStatement f => BindFor(f),
+            BreakStatement b => BindLoopJump(b.Span, "break", new BoundBreakStatement()),
+            ContinueStatement c => BindLoopJump(c.Span, "continue", new BoundContinueStatement()),
             _ => throw new UnreachableException(),
         };
+
+        // A condition must be a bool; there is no "truthy" value (design.md "Control flow").
+        private BoundExpression BindCondition(Expression expression)
+        {
+            var condition = BindExpression(expression);
+            if (condition.Type != TypeSymbol.BoolType && condition.Type != TypeSymbol.ErrorType)
+            {
+                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{condition.Type}' to 'bool'", expression.Span);
+            }
+
+            return condition;
+        }
+
+        private BoundIfStatement BindIf(IfStatement statement)
+        {
+            var condition = BindCondition(statement.Condition);
+            var then = BindBlock(statement.Then);
+
+            BoundBlock? elseBlock = null;
+            if (statement.ElseBlock is { } block)
+            {
+                elseBlock = BindBlock(block);
+            }
+            else if (statement.ElseIf is { } elseIf)
+            {
+                elseBlock = new BoundBlock([BindIf(elseIf)]);
+            }
+
+            return new BoundIfStatement(condition, then, elseBlock);
+        }
+
+        private BoundWhileStatement BindWhile(WhileStatement statement)
+        {
+            var condition = BindCondition(statement.Condition);
+            return new BoundWhileStatement(condition, BindLoopBody(statement.Body));
+        }
+
+        private BoundForStatement BindFor(ForStatement statement)
+        {
+            // The bounds are bound before the loop variable exists, so they cannot refer to it.
+            var start = BindRangeBound(statement.Start);
+            var end = BindRangeBound(statement.End);
+
+            _scopes.Push();
+            var variable = new VariableSymbol(statement.Variable.Text, TypeSymbol.IntType, isMutable: false);
+            Declare(variable, statement.Variable);
+            var body = BindLoopBody(statement.Body);
+            _scopes.Pop();
+
+            return new BoundForStatement(variable, start, end, statement.IsInclusive, body);
+        }
+
+        private BoundExpression BindRangeBound(Expression expression)
+        {
+            var bound = BindExpression(expression);
+            if (bound.Type != TypeSymbol.IntType && bound.Type != TypeSymbol.ErrorType)
+            {
+                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{bound.Type}' to 'int'", expression.Span);
+            }
+
+            return bound;
+        }
+
+        private BoundBlock BindLoopBody(Block body)
+        {
+            _loopDepth++;
+            var bound = BindBlock(body);
+            _loopDepth--;
+            return bound;
+        }
+
+        private BoundStatement BindLoopJump(TextSpan span, string keyword, BoundStatement statement)
+        {
+            if (_loopDepth == 0)
+            {
+                Error(DiagnosticCodes.JumpOutsideLoop, $"'{keyword}' can only be used inside a loop", span);
+            }
+
+            return statement;
+        }
 
         private BoundReturnStatement BindReturn(ReturnStatement statement)
         {
@@ -180,14 +287,7 @@ public static class Binder
             }
 
             var variable = new VariableSymbol(declaration.Name.Text, type, declaration.IsMutable);
-            if (_variables.ContainsKey(variable.Name))
-            {
-                Error(DiagnosticCodes.AlreadyDeclared, $"'{variable.Name}' is already declared in this block", declaration.Name.Span);
-            }
-            else
-            {
-                _variables[variable.Name] = variable;
-            }
+            Declare(variable, declaration.Name);
 
             return new BoundVariableDeclaration(variable, initializer);
         }
@@ -196,7 +296,7 @@ public static class Binder
         {
             var value = BindExpression(assignment.Value);
 
-            if (!_variables.TryGetValue(assignment.Target.Text, out var variable))
+            if (!_scopes.TryGet(assignment.Target.Text, out var variable))
             {
                 Error(DiagnosticCodes.UndefinedName, $"'{assignment.Target.Text}' is not defined", assignment.Target.Span);
                 return new BoundExpressionStatement(value);
@@ -242,7 +342,7 @@ public static class Binder
 
         private BoundExpression BindName(NameExpression name)
         {
-            if (_variables.TryGetValue(name.Name.Text, out var variable))
+            if (_scopes.TryGet(name.Name.Text, out var variable))
             {
                 return new BoundVariableExpression(variable);
             }
@@ -259,7 +359,11 @@ public static class Binder
                 return operand;
             }
 
-            if (operand.Type != TypeSymbol.IntType && operand.Type != TypeSymbol.DoubleType)
+            var isNot = unary.Operator == UnaryOperator.Not;
+            var accepted = isNot
+                ? operand.Type == TypeSymbol.BoolType
+                : operand.Type == TypeSymbol.IntType || operand.Type == TypeSymbol.DoubleType;
+            if (!accepted)
             {
                 Error(
                     DiagnosticCodes.InvalidOperator,
@@ -268,7 +372,7 @@ public static class Binder
                 return new BoundErrorExpression();
             }
 
-            return new BoundUnaryExpression(BoundUnaryOperator.Negate, operand);
+            return new BoundUnaryExpression(isNot ? BoundUnaryOperator.Not : BoundUnaryOperator.Negate, operand);
         }
 
         private BoundExpression BindBinary(BinaryExpression binary)
@@ -310,6 +414,8 @@ public static class Binder
                     => isNumber ? TypeSymbol.BoolType : null,
                 BinaryOperator.Equal or BinaryOperator.NotEqual
                     => isNumber || left == TypeSymbol.BoolType ? TypeSymbol.BoolType : null,
+                BinaryOperator.And or BinaryOperator.Or
+                    => left == TypeSymbol.BoolType ? TypeSymbol.BoolType : null,
                 _ => throw new UnreachableException(),
             };
         }
@@ -327,6 +433,8 @@ public static class Binder
             BinaryOperator.GreaterOrEqual => BoundBinaryOperator.GreaterOrEqual,
             BinaryOperator.Equal => BoundBinaryOperator.Equal,
             BinaryOperator.NotEqual => BoundBinaryOperator.NotEqual,
+            BinaryOperator.And => BoundBinaryOperator.And,
+            BinaryOperator.Or => BoundBinaryOperator.Or,
             _ => throw new UnreachableException(),
         };
 

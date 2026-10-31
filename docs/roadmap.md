@@ -613,33 +613,133 @@ a wrong argument count, an unknown instance method, and a method with an unsuppo
 
 ---
 
+## Slice 5: control flow
+
+**Goal.** Branches, loops and boolean logic, and the recursion programs that slice 3 could only compile.
+
+```
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+fn main() {
+    let mut total = 0
+    for i in 1..=5 {
+        total = total + factorial(i)
+    }
+    print(total)                // 153
+}
+```
+
+**Decisions** are recorded in design.md "Control flow" and "Scopes" and decisions.md D-049 to D-053.
+
+**Details fixed for this slice:**
+- Lexer: keywords `if`, `else`, `while`, `for`, `in`, `break`, `continue`; tokens `AMPAMP` (`&&`), `PIPEPIPE` (`||`),
+  `BANG` (`!`), `DOTDOT` (`..`), `DOTDOTEQ` (`..=`). `0..10` lexes as `INT_LITERAL DOTDOT INT_LITERAL` because a `.`
+  starts a fraction only when a digit follows. `EndsStatement` gains `BREAK` and `CONTINUE`.
+- Grammar: statements `ifStatement`, `whileStatement`, `forStatement`, `breakStatement`, `continueStatement`.
+  `ifStatement : IF condition=expression then=block (terminator? ELSE (elseIf=ifStatement | elseBlock=block))?` (the
+  optional terminator is what lets `else` start on the next line).
+  `forStatement : FOR variable=IDENTIFIER IN start=expression (DOTDOT | DOTDOTEQ) end=expression body=block`. The range is
+  part of `for`, not a general expression. Expression ladder: unary `-` / `!`, `* / %`, `+ -`, comparisons, `== !=`,
+  then new `&&`, then `||`.
+- AST: `IfStatement(Condition, Then, ElseBlock?, ElseIf?)`, `WhileStatement(Condition, Body)`,
+  `ForStatement(Variable, Start, End, IsInclusive, Body)`, `BreakStatement`, `ContinueStatement`; `UnaryOperator.Not`;
+  `BinaryOperator.And` and `Or`.
+- Binder. Scopes become a stack of dictionaries, one per block. Declaring a name that any enclosing scope of the function
+  already has is `NIR2005`, with the message `'x' is already declared in this block` for the current scope and
+  `'x' is already declared in an enclosing block` for an outer one. A condition that is not `bool` is `NIR3001`
+  (`cannot convert 'int' to 'bool'`) at the condition. A `for` bound that is not `int` is `NIR3001` at that bound.
+  `break` / `continue` outside a loop is `NIR3010` (`'break' can only be used inside a loop`). `!`, `&&` and `||` on
+  anything but `bool` are `NIR3003`. An `else if` is bound as an `else` block holding one `if`. The "must return" check uses
+  `AlwaysReturns(block)`: the last statement is a `return`, or an `if` with an else where both blocks always return.
+- Bound nodes: `BoundIfStatement(Condition, Then, ElseBlock?)`, `BoundWhileStatement`, `BoundForStatement`,
+  `BoundBreakStatement`, `BoundContinueStatement`; `BoundUnaryOperator.Not`; `BoundBinaryOperator.And` / `Or`.
+- Emit. `if`: `brfalse` to the else label; the `br` over the else block and the end label are emitted only when a
+  branch can fall through (a block that always returns needs neither, which also keeps a function that ends in a returning
+  `if` / `else` valid IL). `while`: top label, `brfalse` to the end, body, `br` top; `continue` jumps to the top and `break`
+  to the end. `for`: evaluate start into the variable's local and the end into a hidden local, then the same shape with the
+  test `i < end` (`i <= end` when inclusive) and `i = i + 1` (checked) at the `continue` label. `&&` / `||` are branches,
+  not `and` / `or` instructions. `!` is `ldc.i4.0; ceq`.
+- Out of scope: `if` as an expression, labels, `loop`, looping over collections, `match`.
+
+**New diagnostics.** `NIR3010` `'{keyword}' can only be used inside a loop`. `NIR2005`'s message gains the "enclosing
+block" form. `NIR3001` and `NIR3003` are reused.
+
+**Acceptance programs** (`Programs/slice5/`): `if` / `else if` / `else` (all three branches taken in turn), `else` on
+its own line, nested loops with `break` and `continue`, `for` with `..` and `..=` and an empty range, a loop variable
+used after the loop is an error, short-circuit proof (a function with a visible `print` on the right side that is not
+called), `!`, scope reuse between sibling blocks, factorial / fibonacci / `is_even` + `is_odd` (mutual recursion) /
+Collatz, and errors for: non-`bool` condition, non-`int` range bound, redeclaring in a nested block (a local, a parameter
+and a loop variable), `break` and `continue` outside a loop, `!` and `&&` on non-booleans, a missing return when the final
+`if` has no `else`, and an accepted return when both branches return.
+
+### Tasks
+
+- [x] **T5.0 Syntax**
+  - Lexer tokens and keywords above; grammar; AST nodes and operators; `AstBuilder`; `AstFormatter`.
+  - Tests: lexer (`..` vs `.` vs `..=` vs a double, `0..10`, `&&` / `||` / `!` vs `!=`, new keywords, newline after
+    `break` / `continue` ends the statement, newline before `else`); parser trees for `if` (alone, with else, with
+    `else if` chains, with `else` on the next line), `while`, `for` with `..` and `..=`, `break`, `continue`, precedence
+    of `!`, `&&`, `||` against comparison and equality, spans; syntax errors (`if {`, `if x`, `for i 0..3 {}`,
+    `for i in 0.. {}`, `while`, `else {}` alone) report `NIR1001` without throwing.
+  - **Done when:** these pass.
+
+- [x] **T5.1 Binder**
+  - Scope stack and the new `NIR2005` wording; conditions; `for` and loop depth; `break` / `continue`; logical operators;
+    `AlwaysReturns`; new bound nodes.
+  - Tests with positions for every rule and code above, including: a name reused in sibling blocks is fine; a name reused
+    inside a nested block, as a parameter, as a loop variable is `NIR2005`; the loop variable is not visible after the
+    loop; the loop variable cannot be assigned (`NIR3002`); an error-typed condition adds nothing more;
+    `AlwaysReturns` cases (if/else both return, else-if chain with final else, if without else, while).
+  - **Done when:** these pass.
+
+- [x] **T5.2 Emitter**
+  - Branches, loops, short circuit, `!`, labels for `break` / `continue`.
+  - Tests (via `TestHost.Run`): every branch of an `if` chain; `else` on the next line; `while` counting; `for` with `..`,
+    `..=`, empty and single-pass ranges; `break` and `continue` in nested loops (each affects only the innermost);
+    short circuit (the right side's visible effect does not happen); `!`; truth tables for `&&` and `||`;
+    factorial(10) = 3628800, fibonacci(15) = 610, `is_even(10)` / `is_odd(7)`, Collatz steps for 27 = 111; a function whose
+    only `return`s are inside an `if` / `else`; an end bound of `int.MaxValue` exclusive does not overflow.
+  - **Done when:** these pass.
+
+- [x] **T5.3 Program tests and docs**
+  - `Programs/slice5/` golden programs for every acceptance item and `Slice5ProgramTests`; update `architecture.md`
+    (sections 4 to 8), the samples (add `control_flow.nir` and error samples), tick tasks, update `CLAUDE.md`.
+  - **Done when:** all acceptance items pass, `dotnet build` has 0 warnings, `dotnet test` is green.
+
+---
+
 ## Later slices (outline; detailed when each starts)
 
-**Slice 5: control flow and strings.** Also run the recursion programs that slice 3 could only bind: factorial,
-fibonacci, and mutually recursive `is_even` / `is_odd`. `if` / `else if` / `else`; `for i in a..b`; `while`; `break` / `continue`; boolean
-operators; string interpolation (`$"..."`, port the lexer modes from `reference/NirLexer.g4`) and escape decoding;
-string `+`; explicit numeric conversion. *Decisions required:* is `a..b` end-exclusive (recommendation: yes); does `while`
-exist (recommendation: yes); boolean operator spelling (`&&` `||` `!` or `and` `or` `not`); conversion syntax.
+**Slice 6: strings and conversions.** String `+` (two strings only), `==` and `!=` on strings, string interpolation
+(`$"x = {x}"`, port the lexer modes from `reference/NirLexer.g4`), escape decoding in plain and interpolated strings
+(`\n \t \r \\ \" \{`, and `{{` `}}`), and `x as double` / `d as int` (`d as int` throws when out of range or NaN).
+*Decisions required* before coding: exact escape list, whether `as` can also apply to `bool` / `string` (recommendation:
+no), and what `{x}` prints (recommendation: the value's `ToString()` with invariant culture).
 
-**Slice 6: structs, methods, mutability by path.** `type P = struct {...}`, literals `P { x = 1 }`, field read/write,
+**Slice 7: structs, methods, mutability by path.** `type P = struct {...}`, literals `P { x = 1 }`, field read/write,
 value semantics, `impl` blocks, `&self` / `&mut self` (compiled to CLR byref `this`), associated functions
 `P::new()`, `Self`. Design sections 2 to 5.
 
-**Slice 7: tuples, unions, `match`.** Tuples as `ValueTuple`; `union { A, B }`; exhaustive `match`. Design section 11.
+**Slice 8: tuples, unions, `match`.** Tuples as `ValueTuple`; `union { A, B }`; exhaustive `match`. Design section 11.
 
-**Slice 8: errors.** `type E = error {...}`, `E!T`, `anyerror`, `error` keyword, `try`, `catch`, `fn main() -> anyerror!`,
+**Slice 9: errors.** `type E = error {...}`, `E!T`, `anyerror`, `error` keyword, `try`, `catch`, `fn main() -> anyerror!`,
 C# exceptions wrapped as `anyerror` under `try`. Design section 10.
 
-**Slice 9: heap references.** `&T`, `&mut T`, `&T {...}`, `&` of a variable (hoisted to a `Ref<T>`), `?T`, null. Design
+**Slice 10: heap references.** `&T`, `&mut T`, `&T {...}`, `&` of a variable (hoisted to a `Ref<T>`), `?T`, null. Design
 sections 3, 4, 6, 7.
 
-**Slice 10: modules.** `namespace`, multi-file compilation, `using` for Nir code, `impl` placement rule, `extend`
+**Slice 11: modules.** `namespace`, multi-file compilation, `using` for Nir code, `impl` placement rule, `extend`
 blocks and method imports, C# extension methods. Design section 9.
 
-**Slice 11: enum, interface, arrays, generic C# types.** Needed for real library use (`List<T>`, `byte[]`).
+**Slice 12: enum, interface, arrays, generic C# types.** Needed for real library use (`List<T>`, `byte[]`).
 
 **Milestone M1.** An encrypt/decrypt CLI (read a file, transform its bytes with a key, write the result, handle errors
-with `try`) written in Nir and compiled with `nir`. The real program is written when slice 8 is done; it fixes the exact
+with `try`) written in Nir and compiled with `nir`. The real program is written when slice 9 is done; it fixes the exact
 set of missing BCL-interop features.
 
 ## Backlog (not scheduled; do not start without being asked)

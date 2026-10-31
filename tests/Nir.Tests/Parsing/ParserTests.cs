@@ -786,5 +786,220 @@ public class ParserTests
         var diagnostic = Assert.Single(diagnostics);
         Assert.Equal(DiagnosticCodes.SyntaxError, diagnostic.Code);
     }
+
+    [Fact]
+    public void If_without_else()
+    {
+        Assert.Equal(
+            """
+            If
+              Binary >
+                Name x
+                IntLiteral 0
+              Block
+                ExpressionStatement
+                  CallExpression print
+                    IntLiteral 1
+            """,
+            StatementTree("if x > 0 {\n    print(1)\n}"));
+    }
+
+    [Fact]
+    public void If_with_else()
+    {
+        Assert.Equal(
+            """
+            If
+              Name flag
+              Block
+                Return
+              Else
+                Block
+                  Break
+            """,
+            StatementTree("if flag {\n    return\n} else {\n    break\n}"));
+    }
+
+    [Fact]
+    public void Else_if_chain()
+    {
+        Assert.Equal(
+            """
+            If
+              Name a
+              Block
+              Else
+                If
+                  Name b
+                  Block
+                  Else
+                    Block
+            """,
+            StatementTree("if a {\n} else if b {\n} else {\n}"));
+    }
+
+    [Fact]
+    public void Else_may_start_on_the_next_line()
+    {
+        Assert.Equal(StatementTree("if a {\n} else {\n}"), StatementTree("if a {\n}\nelse {\n}"));
+    }
+
+    [Fact]
+    public void A_statement_after_an_if_is_not_swallowed_as_its_else()
+    {
+        Assert.Equal(
+            """
+            If
+              Name a
+              Block
+            ExpressionStatement
+              CallExpression print
+                IntLiteral 1
+            """,
+            StatementTree("if a {\n}\nprint(1)"));
+    }
+
+    [Fact]
+    public void Parenthesised_condition_is_just_an_expression()
+    {
+        Assert.Equal(
+            """
+            If
+              Parenthesized
+                Binary ==
+                  Name a
+                  Name b
+              Block
+            """,
+            StatementTree("if (a == b) {\n}"));
+    }
+
+    [Fact]
+    public void While_loop()
+    {
+        Assert.Equal(
+            """
+            While
+              Binary !=
+                Name n
+                IntLiteral 1
+              Block
+                Continue
+            """,
+            StatementTree("while n != 1 {\n    continue\n}"));
+    }
+
+    [Theory]
+    [InlineData("..", "..")]
+    [InlineData("..=", "..=")]
+    public void For_loop_with_exclusive_and_inclusive_ranges(string op, string shown)
+    {
+        Assert.Equal(
+            $"""
+            For i in {shown}
+              IntLiteral 0
+              Binary +
+                Name n
+                IntLiteral 1
+              Block
+            """,
+            StatementTree($"for i in 0{op}n + 1 {{\n}}"));
+    }
+
+    [Fact]
+    public void Break_and_continue()
+    {
+        Assert.Equal("Break\nContinue", StatementTree("break\ncontinue"));
+    }
+
+    [Fact]
+    public void Not_binds_like_unary_minus()
+    {
+        Assert.Equal(
+            """
+            Binary &&
+              Unary !
+                Name a
+              Name b
+            """,
+            ExpressionTree("!a && b"));
+    }
+
+    [Fact]
+    public void And_binds_tighter_than_or()
+    {
+        Assert.Equal(
+            """
+            Binary ||
+              Name a
+              Binary &&
+                Name b
+                Name c
+            """,
+            ExpressionTree("a || b && c"));
+    }
+
+    [Fact]
+    public void Comparison_and_equality_bind_tighter_than_and()
+    {
+        Assert.Equal(
+            """
+            Binary &&
+              Binary <
+                Name a
+                IntLiteral 1
+              Binary ==
+                Name b
+                Name c
+            """,
+            ExpressionTree("a < 1 && b == c"));
+    }
+
+    [Fact]
+    public void Logical_operators_are_left_associative()
+    {
+        Assert.Equal(
+            """
+            Binary ||
+              Binary ||
+                Name a
+                Name b
+              Name c
+            """,
+            ExpressionTree("a || b || c"));
+    }
+
+    [Fact]
+    public void Control_flow_spans()
+    {
+        const string text = "fn main() { if a { } else { } }";
+        var (unit, _) = Parse(text);
+
+        var statement = (IfStatement)unit.Functions[0].Body.Statements[0];
+        Assert.Equal(new TextSpan(12, 17), statement.Span);
+        Assert.Equal(new TextSpan(17, 3), statement.Then.Span);
+    }
+
+    [Theory]
+    [InlineData("fn main() { if { } }")]
+    [InlineData("fn main() { if x }")]
+    [InlineData("fn main() { if x { } else }")]
+    [InlineData("fn main() { else { } }")]
+    [InlineData("fn main() { while }")]
+    [InlineData("fn main() { while x }")]
+    [InlineData("fn main() { for i 0..3 { } }")]
+    [InlineData("fn main() { for i in 0.. { } }")]
+    [InlineData("fn main() { for i in 0..3 }")]
+    [InlineData("fn main() { for in 0..3 { } }")]
+    [InlineData("fn main() { x && }")]
+    [InlineData("fn main() { ! }")]
+    public void Broken_control_flow_reports_NIR1001_and_still_returns_a_tree(string source)
+    {
+        var (unit, diagnostics) = Parse(source);
+
+        Assert.NotNull(unit);
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal(DiagnosticCodes.SyntaxError, diagnostic.Code);
+    }
 }
 

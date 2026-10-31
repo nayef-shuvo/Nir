@@ -1,0 +1,7 @@
+// Expect: NIR3010 "'break' can only be used inside a loop" on line 6: the loop above has already ended.
+fn main() {
+    while false {
+        print("never")
+    }
+    break
+}

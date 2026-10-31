@@ -1,0 +1,9 @@
+// Expect: NIR2005 "'total' is already declared in an enclosing block" on line 6.
+// Blocks side by side may reuse a name, but an inner block may not reuse a name from a block around it.
+fn main() {
+    let total = 0
+    if total == 0 {
+        let total = 1
+        print(total)
+    }
+}

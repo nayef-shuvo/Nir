@@ -1,0 +1,7 @@
+// Expect: NIR2001 "'i' is not defined" on line 6: the loop variable ends with the loop.
+fn main() {
+    for i in 0..3 {
+        print(i)
+    }
+    print(i)
+}

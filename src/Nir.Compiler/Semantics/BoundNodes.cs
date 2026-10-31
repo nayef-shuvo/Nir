@@ -18,6 +18,19 @@ public sealed record BoundExpressionStatement(BoundExpression Expression) : Boun
 /// <summary><paramref name="Value"/> is null for a bare <c>return</c> in a function that returns <c>()</c>.</summary>
 public sealed record BoundReturnStatement(BoundExpression? Value) : BoundStatement;
 
+/// <summary><paramref name="ElseBlock"/> is null when there is no <c>else</c>. An <c>else if</c> is an else block holding one if.</summary>
+public sealed record BoundIfStatement(BoundExpression Condition, BoundBlock Then, BoundBlock? ElseBlock) : BoundStatement;
+
+public sealed record BoundWhileStatement(BoundExpression Condition, BoundBlock Body) : BoundStatement;
+
+/// <summary><c>for</c> over an int range. Start and end are evaluated once, before the first pass.</summary>
+public sealed record BoundForStatement(VariableSymbol Variable, BoundExpression Start, BoundExpression End, bool IsInclusive, BoundBlock Body)
+    : BoundStatement;
+
+public sealed record BoundBreakStatement : BoundStatement;
+
+public sealed record BoundContinueStatement : BoundStatement;
+
 public sealed record BoundVariableDeclaration(VariableSymbol Variable, BoundExpression Initializer) : BoundStatement;
 
 public sealed record BoundAssignment(VariableSymbol Variable, BoundExpression Value) : BoundStatement;
@@ -48,11 +61,14 @@ public enum BoundBinaryOperator
     GreaterOrEqual,
     Equal,
     NotEqual,
+    And,
+    Or,
 }
 
 public enum BoundUnaryOperator
 {
     Negate,
+    Not,
 }
 
 /// <summary>A binary operation. The operand type (both sides have the same type) tells Emit which instructions to use.</summary>

@@ -1,0 +1,35 @@
+// Functions calling themselves, and each other.
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+fn fibonacci(n: int) -> int {
+    if n < 2 {
+        return n
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+fn is_even(n: int) -> bool {
+    if n == 0 {
+        return true
+    }
+    return is_odd(n - 1)
+}
+
+fn is_odd(n: int) -> bool {
+    if n == 0 {
+        return false
+    }
+    return is_even(n - 1)
+}
+
+fn main() {
+    print(factorial(10))       // 3628800
+    print(fibonacci(20))       // 6765
+    print(is_even(10))         // True
+    print(is_odd(10))          // False
+}

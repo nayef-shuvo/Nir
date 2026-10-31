@@ -1,0 +1,8 @@
+fn f(x: int) {
+    if true {
+        let x = 1
+    }
+}
+
+fn main() {
+}

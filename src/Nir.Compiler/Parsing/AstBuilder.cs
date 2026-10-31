@@ -106,8 +106,63 @@ internal sealed class AstBuilder(SourceText source)
             return new ReturnStatement(BuildExpression(returnStatement.value), SpanOf(returnStatement));
         }
 
+        if (context.ifStatement() is { } ifStatement)
+        {
+            return BuildIf(ifStatement);
+        }
+
+        if (context.whileStatement() is { } whileStatement)
+        {
+            var condition = BuildExpression(whileStatement.condition);
+            var body = BuildBlock(whileStatement.body);
+            return condition is null || body is null ? null : new WhileStatement(condition, body, SpanOf(whileStatement));
+        }
+
+        if (context.forStatement() is { } forStatement)
+        {
+            return BuildFor(forStatement);
+        }
+
+        if (context.breakStatement() is { } breakStatement)
+        {
+            return new BreakStatement(SpanOf(breakStatement));
+        }
+
+        if (context.continueStatement() is { } continueStatement)
+        {
+            return new ContinueStatement(SpanOf(continueStatement));
+        }
+
         var expression = BuildExpression(context.expression());
         return expression is null ? null : new ExpressionStatement(expression, SpanOf(context));
+    }
+
+    private IfStatement? BuildIf(NirParser.IfStatementContext context)
+    {
+        var condition = BuildExpression(context.condition);
+        var then = BuildBlock(context.then);
+        if (condition is null || then is null)
+        {
+            return null;
+        }
+
+        var elseBlock = context.elseBlock is { } block ? BuildBlock(block) : null;
+        var elseIf = context.elseIf is { } nested ? BuildIf(nested) : null;
+        return new IfStatement(condition, then, elseBlock, elseIf, SpanOf(context));
+    }
+
+    private ForStatement? BuildFor(NirParser.ForStatementContext context)
+    {
+        var variable = BuildIdentifier(context.variable);
+        var start = BuildExpression(context.start);
+        var end = BuildExpression(context.end);
+        var body = BuildBlock(context.body);
+        if (variable is null || start is null || end is null || body is null)
+        {
+            return null;
+        }
+
+        return new ForStatement(variable, start, end, context.op.Type == NirParser.DOTDOTEQ, body, SpanOf(context));
     }
 
     private VariableDeclaration? BuildVariableDeclaration(NirParser.VariableDeclarationContext context)
@@ -139,6 +194,8 @@ internal sealed class AstBuilder(SourceText source)
         NirParser.AdditiveExpressionContext a => BuildBinary(a, a.left, a.op, a.right),
         NirParser.RelationalExpressionContext r => BuildBinary(r, r.left, r.op, r.right),
         NirParser.EqualityExpressionContext e => BuildBinary(e, e.left, e.op, e.right),
+        NirParser.LogicalAndExpressionContext a => BuildBinary(a, a.left, a.op, a.right),
+        NirParser.LogicalOrExpressionContext o => BuildBinary(o, o.left, o.op, o.right),
         NirParser.CallExprContext c => c.callExpression() is { } call ? BuildCall(call) : null,
         NirParser.ParenthesizedExpressionContext p => BuildExpression(p.inner) is { } inner ? new ParenthesizedExpression(inner, SpanOf(p)) : null,
         NirParser.StringExprContext s => s.stringLiteral() is { } literal ? BuildStringLiteral(literal) : null,
@@ -154,7 +211,7 @@ internal sealed class AstBuilder(SourceText source)
 
     private UnaryExpression? BuildUnary(NirParser.UnaryExpressionContext context) =>
         BuildExpression(context.operand) is { } operand
-            ? new UnaryExpression(UnaryOperator.Negate, operand, SpanOf(context))
+            ? new UnaryExpression(context.op.Type == NirParser.BANG ? UnaryOperator.Not : UnaryOperator.Negate, operand, SpanOf(context))
             : null;
 
     private BinaryExpression? BuildBinary(
@@ -182,6 +239,8 @@ internal sealed class AstBuilder(SourceText source)
         NirParser.GE => BinaryOperator.GreaterOrEqual,
         NirParser.EQEQ => BinaryOperator.Equal,
         NirParser.NEQ => BinaryOperator.NotEqual,
+        NirParser.AMPAMP => BinaryOperator.And,
+        NirParser.PIPEPIPE => BinaryOperator.Or,
         _ => throw new UnreachableException(),
     };
 

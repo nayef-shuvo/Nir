@@ -1,0 +1,7 @@
+// Expect: NIR3001 "cannot convert 'int' to 'bool'" on line 4, under the condition. There is no "truthy" number.
+fn main() {
+    let count = 3
+    if count {
+        print("some")
+    }
+}

@@ -69,6 +69,9 @@ public static class DiagnosticCodes
     /// <summary>A bare <c>return</c> in a function that must return a value.</summary>
     public const string MissingReturnValue = "NIR3009";
 
+    /// <summary><c>break</c> or <c>continue</c> outside a loop.</summary>
+    public const string JumpOutsideLoop = "NIR3010";
+
     /// <summary>A .NET method whose return type Nir cannot use yet.</summary>
     public const string UnsupportedClrType = "NIR3011";
 

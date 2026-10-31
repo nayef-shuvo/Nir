@@ -1,0 +1,13 @@
+fn main() {
+    for i in 0..3 {
+        for j in 0..3 {
+            if j == 1 {
+                continue
+            }
+            if j == 2 {
+                break
+            }
+            print(i * 10 + j)
+        }
+    }
+}

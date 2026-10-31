@@ -1,0 +1,15 @@
+fn yes() -> bool {
+    print("yes called")
+    return true
+}
+
+fn no() -> bool {
+    print("no called")
+    return false
+}
+
+fn main() {
+    print(no() && yes())
+    print(yes() || no())
+    print(yes() && no())
+}

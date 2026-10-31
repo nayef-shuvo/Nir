@@ -15,11 +15,14 @@ public enum BinaryOperator
     GreaterOrEqual,
     Equal,
     NotEqual,
+    And,
+    Or,
 }
 
 public enum UnaryOperator
 {
     Negate,
+    Not,
 }
 
 public static class OperatorText
@@ -38,12 +41,15 @@ public static class OperatorText
         BinaryOperator.GreaterOrEqual => ">=",
         BinaryOperator.Equal => "==",
         BinaryOperator.NotEqual => "!=",
+        BinaryOperator.And => "&&",
+        BinaryOperator.Or => "||",
         _ => throw new UnreachableException(),
     };
 
     public static string Of(UnaryOperator op) => op switch
     {
         UnaryOperator.Negate => "-",
+        UnaryOperator.Not => "!",
         _ => throw new UnreachableException(),
     };
 }

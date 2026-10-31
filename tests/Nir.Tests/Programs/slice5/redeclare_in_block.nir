@@ -1,0 +1,6 @@
+fn main() {
+    let total = 0
+    if true {
+        let total = 1
+    }
+}

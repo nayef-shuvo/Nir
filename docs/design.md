@@ -33,7 +33,7 @@ fn clamp(x: int, max: int) -> int {
 }
 ```
 
-### Scopes [locked: same-block and parameter rules; open: nested blocks]
+### Scopes [locked]
 
 Redeclaring a name in the same block is an error:
 
@@ -52,15 +52,73 @@ fn f(x: int) {
 }
 ```
 
-Open: whether a nested block (`if`, `for`) may declare a name that an enclosing block already uses. The simplest rule
-consistent with the above is that it may not either. Decide in slice 5, when blocks first nest.
+A nested block (`if`, `while`, `for` body) may not declare a name that an enclosing block of the same function already
+declares, including the function's parameters and a `for` loop's variable. Blocks side by side may reuse a name, because
+each name ends with its block:
+
+```
+fn main() {
+    let total = 0
+    if total == 0 {
+        let total = 1           // error: 'total' is already declared in an enclosing block
+    }
+    if total == 0 {
+        let step = 1
+    }
+    if total == 0 {
+        let step = 2            // fine: the first 'step' ended with its block
+    }
+}
+```
 
 ### Numbers [locked]
 
 - Primitive types: `int` (32-bit), `double`, `bool`, `string`. There is no `float` for now.
-- No implicit conversions between numeric types. `1 + 2.5` is an error. The conversion syntax is decided later (slice 5).
+- No implicit conversions between numeric types. `1 + 2.5` is an error. The conversion syntax is decided with slice 6 (strings and conversions).
 - Integer arithmetic overflow throws, so `2147483647 + 1` crashes with an `OverflowException`. A build flag to switch to
   wrapping arithmetic may come later. Integer division by zero also crashes (CLR behavior), like any unrecoverable failure.
+
+### Control flow [locked]
+
+```
+fn main() {
+    let limit = 20
+    let mut total = 0
+
+    for i in 0..limit {              // i = 0, 1, ... 19 (the end is not included)
+        if i % 2 == 0 {
+            continue
+        }
+        total = total + i
+    }
+
+    let mut n = 27
+    let mut steps = 0
+    while n != 1 {
+        if n % 2 == 0 {
+            n = n / 2
+        } else if n > 1000 && steps > 0 {
+            break
+        } else {
+            n = 3 * n + 1
+        }
+        steps = steps + 1
+    }
+}
+```
+
+- A condition must be a `bool`. There is no "truthy" `int` or `string`: `if n {` with an `int` is an error. Braces are
+  always required; parentheses around a condition are not needed.
+- `if` is a statement, not an expression. `else` may be on the next line.
+- `while condition { }` and `for i in a..b { }`. The end of `a..b` is not included; `a..=b` includes it. In a `for`,
+  `a` and `b` must be `int`, they are evaluated once before the loop, and `i` is a new immutable `int` for each pass.
+  Looping over collections comes later. There is no `loop { }`; write `while true { }`.
+- `break` leaves the innermost loop and `continue` starts its next pass. There are no labels. Using either outside a
+  loop is an error.
+- `&&`, `||` and `!` work on `bool` only. `&&` and `||` do not evaluate the right side when the left side already
+  decides the result. Precedence, highest first: unary `-` and `!`, then `* / %`, `+ -`, `< <= > >=`, `== !=`, `&&`, `||`.
+- "Every path returns": a function that returns a value must end with `return value`, or with an `if` / `else` whose
+  branches both end that way (also `else if` chains that end in `else`). A loop never counts, even `while true`.
 
 ## 2. Type declarations [proposed]
 

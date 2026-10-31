@@ -16,4 +16,16 @@ public sealed record VariableDeclaration(Identifier Name, bool IsMutable, Identi
 /// <summary><c>return</c> or <c>return value</c>. <paramref name="Value"/> is null for a bare return.</summary>
 public sealed record ReturnStatement(Expression? Value, TextSpan Span) : Statement(Span);
 
+/// <summary><c>else if</c> is <paramref name="ElseIf"/>; a plain <c>else</c> is <paramref name="ElseBlock"/>; at most one is set.</summary>
+public sealed record IfStatement(Expression Condition, Block Then, Block? ElseBlock, IfStatement? ElseIf, TextSpan Span) : Statement(Span);
+
+public sealed record WhileStatement(Expression Condition, Block Body, TextSpan Span) : Statement(Span);
+
+/// <summary><c>for variable in start..end { }</c>, or <c>start..=end</c> when <paramref name="IsInclusive"/>.</summary>
+public sealed record ForStatement(Identifier Variable, Expression Start, Expression End, bool IsInclusive, Block Body, TextSpan Span) : Statement(Span);
+
+public sealed record BreakStatement(TextSpan Span) : Statement(Span);
+
+public sealed record ContinueStatement(TextSpan Span) : Statement(Span);
+
 public sealed record AssignmentStatement(Identifier Target, Expression Value, TextSpan Span) : Statement(Span);

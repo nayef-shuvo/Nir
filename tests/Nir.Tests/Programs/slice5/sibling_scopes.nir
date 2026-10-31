@@ -1,0 +1,16 @@
+fn main() {
+    if true {
+        let step = 1
+        print(step)
+    }
+    if true {
+        let step = 2
+        print(step)
+    }
+    for i in 0..2 {
+        print(i)
+    }
+    for i in 5..7 {
+        print(i)
+    }
+}

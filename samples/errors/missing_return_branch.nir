@@ -1,0 +1,10 @@
+// Expect: NIR3007 on line 2: the `if` has no `else`, so a negative `n` is the only case that returns.
+fn sign(n: int) -> int {
+    if n < 0 {
+        return -1
+    }
+}
+
+fn main() {
+    print(sign(-4))
+}

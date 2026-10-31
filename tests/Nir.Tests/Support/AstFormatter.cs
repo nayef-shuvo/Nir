@@ -31,6 +31,12 @@ internal static class AstFormatter
         MemberCallExpression m => $"MemberCall {m.Method.Text}",
         FunctionDeclaration f => $"FunctionDeclaration {f.Name.Text}{Signature(f)}",
         ReturnStatement => "Return",
+        IfStatement => "If",
+        WhileStatement => "While",
+        ForStatement f => $"For {f.Variable.Text} in {(f.IsInclusive ? "..=" : "..")}",
+        BreakStatement => "Break",
+        ContinueStatement => "Continue",
+        Label l => l.Text,
         Block => "Block",
         ExpressionStatement => "ExpressionStatement",
         CallExpression c => $"CallExpression {c.Callee.Text}",
@@ -46,6 +52,25 @@ internal static class AstFormatter
         ParenthesizedExpression => "Parenthesized",
         _ => throw new UnreachableException(),
     };
+
+    // The condition, the then-block, and the else part under an `Else` line so the two blocks can be told apart.
+    private static List<SyntaxNode> IfChildren(IfStatement statement)
+    {
+        var children = new List<SyntaxNode> { statement.Condition, statement.Then };
+        if (statement.ElseBlock is { } block)
+        {
+            children.Add(new Label("Else", block));
+        }
+        else if (statement.ElseIf is { } elseIf)
+        {
+            children.Add(new Label("Else", elseIf));
+        }
+
+        return children;
+    }
+
+    // A line of the printed tree that is not itself a syntax node.
+    private sealed record Label(string Text, SyntaxNode Child) : SyntaxNode(default(Nir.Compiler.Diagnostics.TextSpan));
 
     // `::{Math, Console}` for a group import; nothing for a plain one.
     private static string Group(UsingDirective directive) =>
@@ -72,6 +97,11 @@ internal static class AstFormatter
         ExpressionStatement s => [s.Expression],
         CallExpression c => c.Arguments,
         ReturnStatement r => r.Value is { } value ? [value] : [],
+        IfStatement i => IfChildren(i),
+        WhileStatement w => [w.Condition, w.Body],
+        ForStatement f => [f.Start, f.End, f.Body],
+        BreakStatement or ContinueStatement => [],
+        Label l => [l.Child],
         VariableDeclaration d => [d.Initializer],
         AssignmentStatement a => [a.Value],
         NameExpression => [],

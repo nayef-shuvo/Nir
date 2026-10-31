@@ -64,7 +64,34 @@ statement
     : variableDeclaration
     | assignmentStatement
     | returnStatement
+    | ifStatement
+    | whileStatement
+    | forStatement
+    | breakStatement
+    | continueStatement
     | expression
+    ;
+
+// The optional terminator before ELSE lets `else` start on the line after the closing brace.
+ifStatement
+    : IF condition=expression then=block (terminator? ELSE (elseIf=ifStatement | elseBlock=block))?
+    ;
+
+whileStatement
+    : WHILE condition=expression body=block
+    ;
+
+// The range belongs to `for`; it is not an expression of its own.
+forStatement
+    : FOR variable=IDENTIFIER IN start=expression op=(DOTDOT | DOTDOTEQ) end=expression body=block
+    ;
+
+breakStatement
+    : BREAK
+    ;
+
+continueStatement
+    : CONTINUE
     ;
 
 returnStatement
@@ -84,11 +111,13 @@ assignmentStatement
 // binary operators are left-associative.
 expression
     : receiver=expression DOT method=IDENTIFIER LPAREN argumentList? RPAREN  # memberCallExpression
-    | op=MINUS operand=expression                                       # unaryExpression
+    | op=(MINUS | BANG) operand=expression                              # unaryExpression
     | left=expression op=(STAR | SLASH | PERCENT) right=expression      # multiplicativeExpression
     | left=expression op=(PLUS | MINUS) right=expression                # additiveExpression
     | left=expression op=(LT | LE | GT | GE) right=expression           # relationalExpression
     | left=expression op=(EQEQ | NEQ) right=expression                  # equalityExpression
+    | left=expression op=AMPAMP right=expression                        # logicalAndExpression
+    | left=expression op=PIPEPIPE right=expression                      # logicalOrExpression
     | callExpression                                                    # callExpr
     | LPAREN inner=expression RPAREN                                    # parenthesizedExpression
     | stringLiteral                                                     # stringExpr

@@ -288,4 +288,46 @@ public class LexerTests
         Assert.Equal("IDENTIFIER DOT IDENTIFIER SEMI EOF", TokenFormatter.Names("x.\ny"));
         Assert.Equal("IDENTIFIER SEMI DOT IDENTIFIER SEMI EOF", TokenFormatter.Names("x\n.y"));
     }
+
+    [Fact]
+    public void Control_flow_keywords()
+    {
+        Assert.Equal(
+            "IF ELSE WHILE FOR IN BREAK CONTINUE SEMI EOF",
+            TokenFormatter.Names("if else while for in break continue"));
+        Assert.Equal("IDENTIFIER IDENTIFIER IDENTIFIER IDENTIFIER SEMI EOF", TokenFormatter.Names("iffy elsewhere whiled format"));
+    }
+
+    [Fact]
+    public void Range_operators_are_not_confused_with_a_dot_or_a_double()
+    {
+        Assert.Equal("INT_LITERAL DOTDOT INT_LITERAL SEMI EOF", TokenFormatter.Names("0..10"));
+        Assert.Equal("INT_LITERAL DOTDOTEQ INT_LITERAL SEMI EOF", TokenFormatter.Names("0..=10"));
+        Assert.Equal("IDENTIFIER DOTDOT IDENTIFIER SEMI EOF", TokenFormatter.Names("a..b"));
+        Assert.Equal("DOUBLE_LITERAL SEMI EOF", TokenFormatter.Names("0.5"));
+        Assert.Equal("INT_LITERAL DOT IDENTIFIER SEMI EOF", TokenFormatter.Names("5.F"));
+    }
+
+    [Fact]
+    public void Logical_operators_and_bang()
+    {
+        Assert.Equal("BANG IDENTIFIER AMPAMP IDENTIFIER PIPEPIPE IDENTIFIER SEMI EOF", TokenFormatter.Names("!a && b || c"));
+        Assert.Equal("IDENTIFIER NEQ IDENTIFIER SEMI EOF", TokenFormatter.Names("a != b"));
+        Assert.Equal("BANG IDENTIFIER EQ IDENTIFIER SEMI EOF", TokenFormatter.Names("!a = b"));
+    }
+
+    [Theory]
+    [InlineData("break")]
+    [InlineData("continue")]
+    public void Newline_after_break_and_continue_ends_the_statement(string keyword)
+    {
+        Assert.Equal($"{keyword.ToUpperInvariant()} SEMI IDENTIFIER SEMI EOF", TokenFormatter.Names(keyword + "\nx"));
+    }
+
+    [Fact]
+    public void Newline_before_else_ends_the_statement_but_after_open_brace_does_not()
+    {
+        Assert.Equal("RBRACE SEMI ELSE LBRACE RBRACE SEMI EOF", TokenFormatter.Names("}\nelse {\n}"));
+    }
 }
+

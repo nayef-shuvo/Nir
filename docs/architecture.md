@@ -149,7 +149,7 @@ Codes defined so far (slices 1 to 4):
 | NIR2002 | missing entry point | `program has no 'main' function` |
 | NIR2003 | duplicate function | `function '{name}' is already defined` |
 | NIR2004 | wrong argument count | `'{name}' expects {n} argument(s) but got {m}` |
-| NIR2005 | name declared twice in one block | `'{name}' is already declared in this block` |
+| NIR2005 | name already declared in this block or in a block around it | `'{name}' is already declared in this block` / `... in an enclosing block` |
 | NIR2006 | unknown type in an annotation, parameter or return type | `unknown type '{name}'` |
 | NIR2007 | `main` with parameters or a return type | `'main' must have no parameters and no return type` |
 | NIR2008 | import not starting with `clr::cs`, or naming nothing below it | `imports must start with 'clr::cs'` / `'clr::cs' alone names nothing; add a namespace or type after it` |
@@ -165,6 +165,7 @@ Codes defined so far (slices 1 to 4):
 | NIR3007 | function does not end with a return | `'{name}' does not return a value on every path` |
 | NIR3008 | `return value` in a `()` function | `cannot return a value from '{name}' because it returns '()'` |
 | NIR3009 | bare `return` in a value function | `'{name}' must return a value of type '{type}'` |
+| NIR3010 | `break` or `continue` outside a loop | `'{keyword}' can only be used inside a loop` |
 | NIR3011 | .NET method returns a type Nir cannot use yet | `'{method}' returns '{type}', which Nir cannot use yet` |
 
 ## 5. Parsing (`Nir.Compiler.Parsing`)
@@ -213,7 +214,7 @@ The newline logic was ported from `reference/NirLexerBase.cs`; do not redesign i
 file replaces the old single stashed `EOF`.
 
 **Keywords.** A keyword is added to the lexer grammar in the slice that first uses it. Keywords are listed before
-`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Keywords so far: `fn`, `let`, `mut`, `return`, `using`, `true`, `false`. `->` is `ARROW`, `::` is `COLONCOLON`, `.` is `DOT`.
+`IDENTIFIER` in the grammar (ANTLR resolves same-length ties by rule order). Keywords so far: `fn`, `let`, `mut`, `return`, `using`, `if`, `else`, `while`, `for`, `in`, `break`, `continue`, `true`, `false`. `->` is `ARROW`, `::` is `COLONCOLON`, `.` is `DOT`.
 A `using` line is `USING importPath`, and the compilation unit is a list of `topLevelItem`s (a `using` or a function), so
 imports may appear anywhere at the top level. A call target is a `qualifiedName`; a method call on a value is the
 highest-precedence expression alternative (`receiver.Method(args)`). A line cannot start with `.` to continue the previous
@@ -268,6 +269,12 @@ unary `-`, then `* / %`, `+ -`, `< <= > >=`, `== !=`, all left-associative.
 Slice 3 adds: `Parameter(Name, Type)` and `ReturnStatement(Value?)`, and `FunctionDeclaration` now has
 `Parameters` and an optional `ReturnType` (null means the function returns `()`). Types are plain identifiers;
 the binder decides which names are types.
+
+Slice 5 adds the statements `IfStatement(Condition, Then, ElseBlock?, ElseIf?)`, `WhileStatement`, `ForStatement(Variable, Start,
+End, IsInclusive, Body)`, `BreakStatement` and `ContinueStatement`, and the operators `UnaryOperator.Not`, `BinaryOperator.And` and
+`Or`. Grammar: `else` may follow a newline (`terminator? ELSE`); the range of a `for` is part of the `for` rule, not an
+expression; `&&` binds tighter than `||` and both are looser than `==`. `0..10` lexes as `INT_LITERAL DOTDOT INT_LITERAL`
+because a `.` starts a fraction only when a digit follows. `BREAK` and `CONTINUE` are in `EndsStatement`.
 
 Slice 4 adds: `UsingDirective(Path, Members)` (`Members` is empty unless a `{A, B}` group is used), `QualifiedName(Parts)`
 with a `Text` property joining the parts with `::`, and `MemberCallExpression(Receiver, Method, Arguments)`.
@@ -337,10 +344,19 @@ type the receiver's Nir type stands for (`string` is `System.String`, and so on)
 `TypeSymbol.ErrorType`. Anything that receives an error-typed operand reports nothing more and yields an error type, so
 one mistake gives one diagnostic. A variable whose initializer failed is still declared, with `ErrorType`.
 
-**Scope.** One flat dictionary of variables per function body, reset for each function. A variable is visible only after
-its declaration; the initializer is bound before the variable is declared, so `let x = x` does not see the new `x`.
-Redeclaring a name reports `NIR2005` and keeps the first declaration. Types are looked up by name in `LookupType`
-(`int`, `double`, `bool`, `string`).
+**Scope.** `ScopeStack` holds one dictionary per block, innermost last, and is rebuilt for each function. The parameters and
+the function body share the first scope; every nested block (`if`, `else`, `while` and `for` bodies) and every `for` loop
+variable gets its own, which ends with it. A variable is visible only after its declaration; the initializer is bound before
+the variable is declared, so `let x = x` does not see the new `x`. A name may not be declared if any scope of the function
+already has it: `NIR2005`, worded "in this block" or "in an enclosing block", and the first declaration is kept. Blocks side by
+side can reuse names. Types are looked up by name in `LookupType` (`int`, `double`, `bool`, `string`).
+
+**Control flow.** `BindCondition` requires `bool` (`NIR3001` otherwise, and nothing more when the condition already failed).
+`for` bounds are bound before the loop variable exists and must be `int`; the variable is an immutable `int` in its own
+scope, and the body is a nested block inside that scope, so the body cannot redeclare it. `_loopDepth` counts the loops
+being bound; `break` / `continue` at depth 0 is `NIR3010`, and the depth resets for each function. `else if` is bound as an
+else block holding one `if`. `!`, `&&` and `||` accept `bool` only (`NIR3003`). `BoundFlow.AlwaysReturns(block)` decides
+"every path returns": the last statement is a return, or an `if` with an `else` whose two blocks both always return.
 
 **Operator typing.** Both operands must have the same type (no implicit conversions). `+ - * / %` need `int` or `double`
 and give that type; `< <= > >=` need `int` or `double` and give `bool`; `== !=` need `int`, `double` or `bool` and give
@@ -385,7 +401,7 @@ Approach (verified by T1.1, see section 9):
 - Use `System.Reflection.Emit.PersistedAssemblyBuilder` (available since .NET 9) with core assembly
   `typeof(object).Assembly`.
 - Define one public static class named `Program` in the global namespace with one public static method per Nir function,
-  same name. This naming is temporary and changes when modules arrive (slice 9).
+  same name. This naming is temporary and changes when modules arrive (slice 11).
 - Mark the Nir `main` function as the PE entry point:
   `PersistedAssemblyBuilder.GenerateMetadata(out ilStream, out fieldData)`, then `ManagedPEBuilder` with
   `entryPoint: MetadataTokens.MethodDefinitionHandle(mainMethod.MetadataToken)` and a
@@ -407,6 +423,16 @@ Slice 2 additions to emit (`BodyEmitter`, a private class holding the per-functi
   NaN operand makes them false. `!=` is `ceq` then not.
 - The generated runtimeconfig also sets `configProperties: {"System.Globalization.Invariant": true}` so numbers print
   the same on every machine (`2.5`, never `2,5`). `Console.WriteLine(true)` prints `True` (accepted output).
+
+Slice 5 emit additions (`BodyEmitter`): a stack of `(Break, Continue)` labels for the loops being emitted.
+- `if`: `brfalse` to the else label. The `br` over the else part and the end label are emitted only when the then-block can fall
+  through (`BoundFlow.AlwaysReturns` is false), so a function that ends in an `if` / `else` where both branches return has no
+  label pointing past its last instruction, which would be invalid IL. An `if` without `else` just marks the label.
+- `while`: top label, condition, `brfalse` to the end, body, `br` to the top. `continue` jumps to the top, `break` to the end.
+- `for`: the loop variable's local is the counter (safe because it is immutable), the end goes into a hidden local, both
+  evaluated once, start first. The test is `bge end` (`bgt` when inclusive); `continue` jumps to the increment, which is a
+  checked `+ 1`. So `a..b` with `b` = `int.MaxValue` is safe, and `a..=int.MaxValue` ends with an `OverflowException`.
+- `&&` / `||` are branches (`brfalse` / `brtrue` to a label that pushes the decided constant); `!` is `ldc.i4.0; ceq`.
 
 Slice 4 emit additions: the `PersistedAssemblyBuilder` takes its core assembly from `ClrUniverse`, and every CLR type comes
 from the same source (`TypeSymbol.ClrType`, the `print` methods, the found methods). A static CLR call is `call`. A call on a
