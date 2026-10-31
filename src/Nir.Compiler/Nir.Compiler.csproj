@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
+    <PackageReference Include="Antlr4BuildTasks" Version="12.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Antlr4 Include="Parsing/NirLexer.g4">
+      <Package>Nir.Compiler.Parsing</Package>
+      <Listener>false</Listener>
+      <Visitor>false</Visitor>
+    </Antlr4>
+    <Antlr4 Include="Parsing/NirParser.g4">
+      <Package>Nir.Compiler.Parsing</Package>
+      <Listener>false</Listener>
+      <Visitor>false</Visitor>
+    </Antlr4>
+  </ItemGroup>
+
+</Project>

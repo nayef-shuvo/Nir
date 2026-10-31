@@ -1,0 +1,3 @@
+// minimal input for which ANTLR reports exactly one error
+fn main( {
+}

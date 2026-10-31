@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Nir.Cli/Nir.Cli.csproj" />
+    <Project Path="src/Nir.Compiler/Nir.Compiler.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Nir.Tests/Nir.Tests.csproj" />
+  </Folder>
+</Solution>

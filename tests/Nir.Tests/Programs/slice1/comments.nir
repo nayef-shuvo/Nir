@@ -1,0 +1,7 @@
+// leading comment
+fn main() { // after brace
+    // own line
+    print("a") // after statement
+
+    print("b")
+}
