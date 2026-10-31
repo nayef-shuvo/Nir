@@ -39,3 +39,4 @@ Language details live in `design.md`; this file records **that** and **why** a d
 | D-031 | 2026-11-01 | Integer arithmetic is checked: overflow throws. A build flag for wrapping may come later. | User's choice; safer default. Emitted with `add.ovf`, `sub.ovf`, `mul.ovf`. |
 | D-032 | 2026-11-01 | Primitive types for now: `int`, `double`, `bool`, `string`. No `float`. | Keep the first numeric slice small. |
 | D-033 | 2026-11-01 | No implicit conversions between numeric types. | User's choice; conversion syntax is decided in slice 5. |
+| D-034 | 2026-11-01 | Parameters and the function body share one scope, so redeclaring a parameter in the body is an error. A changeable copy needs a new name. This supersedes the "shadow with `let mut x = x`" remark in D-006 and refines D-030. Nested-block shadowing stays open until slice 5. | User's choice; consistent with the same-block rule. |

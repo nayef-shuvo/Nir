@@ -22,18 +22,18 @@ count = count + 1
 x = 11                  // error: x is not mutable
 ```
 
-Parameters are never reassignable. Shadow if you need a changeable copy:
+Parameters are never reassignable. If you need a changeable copy, give it a new name:
 
 ```
 fn clamp(x: int, max: int) -> int {
     x = 5                   // error: parameters cannot be assigned
-    let mut x = x           // ok: new local that shadows the parameter
-    if x > max { x = max }
-    return x
+    let mut result = x      // ok: a new local with its own name
+    if result > max { result = max }
+    return result
 }
 ```
 
-### Scopes [locked: same-block rule; open: parameters]
+### Scopes [locked: same-block and parameter rules; open: nested blocks]
 
 Redeclaring a name in the same block is an error:
 
@@ -44,9 +44,16 @@ fn main() {
 }
 ```
 
-Open: the `clamp` example above shadows a parameter with `let mut x = x`. That is allowed only if the parameters live
-in an outer scope and the function body is a nested block. Proposal: yes, parameters are in the function's outer scope,
-and a nested block may shadow names of enclosing blocks. Needs the user's confirmation before slice 3.
+A function's parameters and its body share one scope, so the body cannot redeclare a parameter either:
+
+```
+fn f(x: int) {
+    let x = x + 1           // error: 'x' is already declared in this block
+}
+```
+
+Open: whether a nested block (`if`, `for`) may declare a name that an enclosing block already uses. The simplest rule
+consistent with the above is that it may not either. Decide in slice 5, when blocks first nest.
 
 ### Numbers [locked]
 

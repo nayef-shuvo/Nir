@@ -303,8 +303,8 @@ operator not defined for types (`operator '{op}' cannot be applied to '{left}' a
 unknown type name. Undefined variable reuses `NIR2001`.
 
 **Decisions (answered 2026-11-01, recorded in design.md section 1 and decisions.md D-030 to D-033):**
-1. Redeclaring a name in the same block is an error. Still open: how this interacts with `let mut x = x` shadowing a
-   parameter (see design.md section 1, "Scopes"). Settle it in slice 3, when parameters arrive; slice 2 has no parameters.
+1. Redeclaring a name in the same block is an error. Parameters and the function body share one scope, so shadowing a
+   parameter is an error too (D-034). Whether a nested block may redeclare an outer name is open until slice 5.
 2. Integer overflow throws (checked arithmetic). A build flag to switch to wrapping may come later.
 3. Only `double` for now; there is no `float` type.
 4. No implicit conversions between numeric types. Conversion syntax is decided in slice 5.
@@ -332,7 +332,8 @@ fn main() {
 }
 ```
 
-**Scope.** Parameters (never assignable; `let mut x = x` makes a copy), `-> type` return types, `return expr`, bare
+**Scope.** Parameters (never assignable; redeclaring a parameter name in the body is an error; a changeable copy needs
+a new name), `-> type` return types, `return expr`, bare
 `return` in unit functions, calls with arguments, recursion, functions calling each other in any order. `main` must have
 no parameters and the unit return type.
 
@@ -343,8 +344,8 @@ mismatch; `main` with parameters or a return type.
 `return`, or both branches of an `if` return) or full flow analysis. Recommendation: simple rule now, revisit with `match`.
 Implicit last-expression results are **not** supported (design section 1 uses explicit `return`).
 
-**Acceptance programs** (`Programs/slice3/`): recursion (factorial, fibonacci), mutual calls, shadowed parameter,
-assigning a parameter is an error, wrong argument type, missing return, return in unit function.
+**Acceptance programs** (`Programs/slice3/`): recursion (factorial, fibonacci), mutual calls,
+redeclaring a parameter in the body is an error, assigning a parameter is an error, wrong argument type, missing return, return in unit function.
 
 ---
 
