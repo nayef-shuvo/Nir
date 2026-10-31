@@ -47,7 +47,19 @@ src/Nir.Cli/bin/Debug/net10.0/nir build samples/hello.nir -o out
 dotnet out/hello.dll
 ```
 
-Compile errors print as `file:line:column: error NIR1234: message` on stderr, and the exit code is 1.
+Compile errors print on stderr in the style of Rust's compiler, with the source line and carets under the exact place,
+in colour on a terminal (set `NO_COLOR=1` to turn colour off), and the exit code is 1:
+
+```
+error[NIR3002]: cannot assign to 'x' because it is not mutable
+ --> samples/errors/assign_immutable.nir:4:5
+  |
+4 |     x = 2
+  |     ^ cannot assign to 'x' because it is not mutable
+
+error: aborting due to 1 previous error
+```
+
 Exit codes: `0` success, `1` compile errors, `2` bad usage, `3` internal compiler error.
 
 ## Run the tests

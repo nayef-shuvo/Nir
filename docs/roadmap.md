@@ -550,7 +550,7 @@ So `TypeSymbol.ClrType`, the built-in `print` methods and the emitter's core ass
 - Out of scope: constructors, generics, properties and fields, events, extension methods, `ref`/`out`, nested types, the
   `System.Linq` extension-method import form.
 
-**New diagnostics.** `NIR2008` `imports must name a namespace or type under 'clr::cs'`; `NIR2009` `'{name}' was not found`; `NIR2010`
+**New diagnostics.** `NIR2008` `imports must start with 'clr::cs'` (or, for `using clr::cs` alone, `'clr::cs' alone names nothing; add a namespace or type after it`); `NIR2009` `'{name}' was not found`; `NIR2010`
 `'{name}' is already imported`; `NIR2011` `'{member}' is not a member of '{container}'`; `NIR3011`
 `'{method}' returns '{type}', which Nir cannot use yet`. `NIR2001`, `NIR2004`, `NIR3006` are reused.
 
@@ -645,7 +645,11 @@ set of missing BCL-interop features.
 ## Backlog (not scheduled; do not start without being asked)
 
 - `nir dump tokens|ast|bound <file>` debug commands (the old repo had token and AST printers to copy ideas from).
-- Better syntax error messages.
+- Better syntax errors: stop one mistake from producing several (decide: report only the first syntax error, or
+  suppress the ones that follow on the same line).
+- Short per-code labels for the text beside the carets (rustc says "not found in this scope" there and the full message
+  in the header); today the label repeats the message.
+- `--color=always|never|auto` flag (today: `NO_COLOR` and `CLICOLOR_FORCE` environment variables).
 - `nir fmt`, language server, REPL.
 - A Nir-written `std` library (`std::fs` etc.) on top of `clr::cs`.
 - Removing ANTLR in favour of a hand-written parser (must only touch `Parsing/`).

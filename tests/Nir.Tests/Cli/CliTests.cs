@@ -54,7 +54,15 @@ public sealed class CliTests : IDisposable
         var (stdout, stderr, exitCode) = Nir("run", source);
 
         Assert.Equal(string.Empty, stdout);
-        Assert.Equal($"{source}:2:5: error NIR2001: 'prnt' is not defined\n", stderr);
+        Assert.Equal(
+            $"error[NIR2001]: 'prnt' is not defined\n" +
+            $" --> {source}:2:5\n" +
+            "  |\n" +
+            "2 |     prnt(\"x\")\n" +
+            "  |     ^^^^ 'prnt' is not defined\n" +
+            "\n" +
+            "error: aborting due to 1 previous error\n",
+            stderr);
         Assert.Equal(1, exitCode);
     }
 

@@ -1,0 +1,9 @@
+// Expect: NIR3003 "operator '/' cannot be applied to 'int' and 'double'" on line 4.
+// (There is no implicit conversion between int and double.)
+fn half(n: int) -> double {
+    return n / 2.0
+}
+
+fn main() {
+    print(half(4))
+}

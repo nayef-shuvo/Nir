@@ -1,0 +1,4 @@
+// Expect: NIR3001 "cannot convert 'double' to 'int'" on line 3.
+fn main() {
+    let count: int = 2.5
+}

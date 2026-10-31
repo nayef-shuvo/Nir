@@ -1,0 +1,5 @@
+// Expect: NIR3002 "cannot assign to 'x' because it is not mutable" on line 4.
+fn main() {
+    let x = 1
+    x = 2
+}

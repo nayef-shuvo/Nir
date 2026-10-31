@@ -1,0 +1,10 @@
+// Expect: NIR3001 on line 8 (a double where an int is needed) and NIR2004 on line 9 (too few arguments).
+fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+fn main() {
+    print(add(1, 2))
+    print(add(1, 2.5))
+    print(add(1))
+}

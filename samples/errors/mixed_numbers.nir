@@ -1,0 +1,4 @@
+// Expect: NIR3003 "operator '+' cannot be applied to 'int' and 'double'" on line 3.
+fn main() {
+    print(1 + 2.5)
+}

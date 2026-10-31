@@ -1,0 +1,6 @@
+// Expect: NIR2008 on line 2 (imports must start with clr::cs) and NIR2009 on line 3 (no such type).
+using System::IO
+using clr::cs::System::Mathh
+
+fn main() {
+}

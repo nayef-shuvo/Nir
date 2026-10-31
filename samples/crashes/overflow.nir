@@ -1,0 +1,6 @@
+// Compiles. Prints 2147483647, then crashes: integer arithmetic is checked (System.OverflowException).
+fn main() {
+    let biggest = 2147483647
+    print(biggest)
+    print(biggest + 1)
+}

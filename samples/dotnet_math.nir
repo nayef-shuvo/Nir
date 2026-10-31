@@ -1,0 +1,19 @@
+// Calling .NET code: System.Math, System.Int32 and System.Console.
+using clr::cs::System::{Math, Int32, Console}
+
+fn hypotenuse(a: double, b: double) -> double {
+    return Math::Sqrt(a * a + b * b)
+}
+
+fn main() {
+    print(Math::Sqrt(16.0))
+    print(Math::Max(3, 7))
+    print(Math::Max(2.5, 1.5))
+    print(Math::Pow(2.0, 10.0))
+    print(hypotenuse(3.0, 4.0))
+
+    let n = Int32::Parse("21")
+    print(n * 2)
+
+    Console::WriteLine("written with Console::WriteLine")
+}

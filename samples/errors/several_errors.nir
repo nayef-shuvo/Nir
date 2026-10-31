@@ -1,0 +1,16 @@
+// Expect: six errors, in order, one per mistake (line 15 has two different mistakes). Note that
+// `count + missing` on line 11 reports only `missing`; the addition adds no second error.
+using clr::cs::System::Math
+
+fn area(width: double, height: double) -> double {
+    return width * height
+}
+
+fn main() {
+    let count: int = 1.5
+    let total = count + missing
+    print(area(2, 3.0))
+    print(Math::Sqroot(4.0))
+    let name = "x"
+    name = 5
+}

@@ -1,0 +1,5 @@
+// Compiles. Prints 5, then crashes with System.DivideByZeroException. (Doubles give Infinity instead.)
+fn main() {
+    print(10 / 2)
+    print(10 / 0)
+}

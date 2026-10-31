@@ -1,0 +1,6 @@
+// Expect: NIR2011 "'Squareroot' is not a member of 'System.Math'" on line 5.
+using clr::cs::System::Math
+
+fn main() {
+    print(Math::Squareroot(16.0))
+}

@@ -1,0 +1,6 @@
+// Expect: NIR3006 "no overload of 'Math.Sqrt' accepts (int)" on line 5: an int is not converted to a double.
+using clr::cs::System::Math
+
+fn main() {
+    print(Math::Sqrt(16))
+}

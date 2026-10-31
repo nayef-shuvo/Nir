@@ -1,0 +1,5 @@
+// Expect: NIR1001 at the `{` on line 3 (the real mistake: the `)` is missing).
+// Further NIR1001 lines are knock-on errors from the parser recovering badly.
+fn main( {
+    print("hello")
+}

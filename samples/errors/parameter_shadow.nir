@@ -1,0 +1,9 @@
+// Expect: NIR2005 on line 3, because the body shares the parameter's scope.
+fn double_it(n: int) -> int {
+    let n = n * 2
+    return n
+}
+
+fn main() {
+    print(double_it(4))
+}

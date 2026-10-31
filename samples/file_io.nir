@@ -1,0 +1,15 @@
+// Writes a text file in the temp folder, reads it back, then deletes it.
+using clr::cs::System::IO
+
+fn main() {
+    let path = IO::Path::Combine(IO::Path::GetTempPath(), "nir-sample.txt")
+    print(path)
+    print(IO::File::Exists(path))
+
+    IO::File::WriteAllText(path, "text stored by a Nir program")
+    print(IO::File::Exists(path))
+    print(IO::File::ReadAllText(path))
+
+    IO::File::Delete(path)
+    print(IO::File::Exists(path))
+}

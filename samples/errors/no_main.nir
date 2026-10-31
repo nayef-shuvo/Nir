@@ -1,0 +1,4 @@
+// Expect: NIR2002 "program has no 'main' function" at line 1, column 1.
+fn helper() {
+    print("never called")
+}

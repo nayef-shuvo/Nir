@@ -1,0 +1,4 @@
+// Expect: NIR2001 "'prnt' is not defined" on line 3.
+fn main() {
+    prnt("hello")
+}

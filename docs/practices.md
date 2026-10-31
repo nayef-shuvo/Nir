@@ -82,8 +82,8 @@ public static class TestHost
 ## 4. Diagnostics
 
 Defined in `docs/architecture.md` section 4. Short version: stable `NIR####` codes in `DiagnosticCodes`, never reused;
-lowercase message with no trailing period; position is 1-based line and column; printed as
-`file:line:col: error NIRxxxx: message`. Adding a diagnostic means: add the constant, add a unit test asserting code and
+lowercase message with no trailing period; position is 1-based line and column; printed in Rust's style
+(source line with carets under the span, see section 4 there). Adding a diagnostic means: add the constant, add a unit test asserting code and
 position, and add a row to the table in `architecture.md` if it is new in the slice.
 
 ## 5. Git

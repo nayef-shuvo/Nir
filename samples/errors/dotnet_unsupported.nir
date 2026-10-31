@@ -1,0 +1,6 @@
+// Expect: NIR3011 on line 5: ReadAllBytes returns bytes, which Nir cannot use yet.
+using clr::cs::System::IO
+
+fn main() {
+    IO::File::ReadAllBytes("anything.bin")
+}

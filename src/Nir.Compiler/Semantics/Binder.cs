@@ -549,7 +549,7 @@ public static class Binder
                 var path = directive.Path;
                 if (path.Length < 2 || path[0].Text != "clr" || path[1].Text != "cs")
                 {
-                    Error(DiagnosticCodes.InvalidImport, "imports must name a namespace or type under 'clr::cs'", path[0].Span);
+                    Error(DiagnosticCodes.InvalidImport, "imports must start with 'clr::cs'", path[0].Span);
                     continue;
                 }
 
@@ -571,7 +571,7 @@ public static class Binder
             var alias = path[^1];
             if (path.Length < 3)
             {
-                Error(DiagnosticCodes.InvalidImport, "imports must name a namespace or type under 'clr::cs'", path[0].Span);
+                Error(DiagnosticCodes.InvalidImport, "'clr::cs' alone names nothing; add a namespace or type after it", path[0].Span);
                 return;
             }
 

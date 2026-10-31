@@ -1,0 +1,7 @@
+// Compiles. A .NET exception is not hidden: this crashes with System.IO.DirectoryNotFoundException.
+using clr::cs::System::IO
+
+fn main() {
+    print("reading a file that does not exist")
+    print(IO::File::ReadAllText("/no-such-folder/missing.txt"))
+}

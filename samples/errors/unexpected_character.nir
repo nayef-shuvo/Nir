@@ -1,0 +1,5 @@
+// Expect: NIR0001 "unexpected character '@'" on line 4, then a knock-on NIR1001 because the `@` is dropped.
+fn main() {
+    let x = 5
+    let y = x @ 3
+}

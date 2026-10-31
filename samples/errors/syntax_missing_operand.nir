@@ -1,0 +1,4 @@
+// Expect: a syntax error (NIR1001) at the `)` on line 3.
+fn main() {
+    print(1 + )
+}

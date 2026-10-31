@@ -1,0 +1,27 @@
+// Functions with parameters and results. Order in the file does not matter.
+fn main() {
+    greet("Nir")
+    print(add(2, 3))
+    print(average(3.0, 4.5))
+    print(add(add(1, 2), add(3, 4)))
+    describe(42, true, "answer")
+}
+
+fn greet(name: string) {
+    print(name.ToUpper())
+}
+
+fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+fn average(a: double, b: double) -> double {
+    let sum = a + b
+    return sum / 2.0
+}
+
+fn describe(n: int, flag: bool, label: string) {
+    print(label)
+    print(n)
+    print(flag)
+}

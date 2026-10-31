@@ -67,7 +67,7 @@ internal static class Commands
         }
 
         result = NirCompiler.Compile(new SourceText(path, File.ReadAllText(path)));
-        DiagnosticPrinter.Print(Console.Error, result.Diagnostics);
+        DiagnosticPrinter.Print(Console.Error, [.. result.Diagnostics], TerminalColor.ForError());
 
         exitCode = result.Succeeded ? ExitCodes.Success : ExitCodes.CompileError;
         return result.Succeeded;

@@ -1,0 +1,6 @@
+// Expect: NIR2001 "'total' is not defined" on line 4 (the first use).
+fn main() {
+    let price = 10
+    print(total)
+    print(price)
+}

@@ -99,13 +99,29 @@ public sealed class DiagnosticBag : IReadOnlyList<Diagnostic>
 }
 ```
 
-Printed form (the CLI prints exactly this, one line per diagnostic, to stderr):
+Printed form. The CLI prints diagnostics to stderr in rustc's style (`Nir.Cli/DiagnosticPrinter.cs`): a header with the
+severity, code and message; a ` --> file:line:column` pointer; the source line with a gutter holding its line number; and
+carets under the exact span with the message beside them. A blank line follows each diagnostic, and a last line counts the
+errors.
 
 ```
-samples/bad.nir:3:5: error NIR2001: 'prnt' is not defined
+error[NIR2001]: 'prnt' is not defined
+ --> samples/bad.nir:3:5
+  |
+3 |     prnt("hello")
+  |     ^^^^ 'prnt' is not defined
+
+error: aborting due to 1 previous error
 ```
 
-That is `<source name>:<line>:<column>: <severity> <code>: <message>`. Severity is lowercase `error` or `warning`.
+Rules: the gutter is as wide as the line number (so `10 |` shifts the rest by one column); tabs are shown as 4 spaces and
+the carets follow; a span with no length gets one caret; a span that runs past the end of its first line is underlined to
+the end of that line; CRLF line endings never show. The message appears twice (header and beside the carets) because
+diagnostics have one message and no separate short label.
+
+Colour (ANSI) is used when stderr is a terminal: bold red for `error[CODE]` and the carets with their message, bold blue
+for `-->`, `|` and line numbers, bold for the header message. Redirected output is plain. `NO_COLOR` turns colour off
+and `CLICOLOR_FORCE=1` forces it on. `TerminalColor.ForError()` decides. Severity is lowercase `error` or `warning`.
 
 **Codes.** `NIR` plus four digits. Ranges:
 
@@ -136,7 +152,7 @@ Codes defined so far (slices 1 to 4):
 | NIR2005 | name declared twice in one block | `'{name}' is already declared in this block` |
 | NIR2006 | unknown type in an annotation, parameter or return type | `unknown type '{name}'` |
 | NIR2007 | `main` with parameters or a return type | `'main' must have no parameters and no return type` |
-| NIR2008 | import not starting with `clr::cs` or naming nothing below it | `imports must name a namespace or type under 'clr::cs'` |
+| NIR2008 | import not starting with `clr::cs`, or naming nothing below it | `imports must start with 'clr::cs'` / `'clr::cs' alone names nothing; add a namespace or type after it` |
 | NIR2009 | imported namespace or type does not exist | `'{name}' was not found` |
 | NIR2010 | same local name imported twice | `'{name}' is already imported` |
 | NIR2011 | namespace, type or value has no such member | `'{member}' is not a member of '{container}'` |
@@ -211,8 +227,9 @@ the token stream (turns the newline, or a synthesized token at end of file, into
 complete string and does not add errors about it. Note the newline is consumed by the string, so a later syntax error
 about a missing `)` can still follow.
 
-**Error messages.** `ParserErrorListener` reports every ANTLR syntax error as `NIR1001` with ANTLR's own message text,
-lowercased first letter, and the span of the offending token. Lexical errors use `NIR0001`/`NIR0002`. Improving
+**Error messages.** `ParserErrorListener` reports every ANTLR syntax error as `NIR1001` with ANTLR's message text rewritten in
+plain words (`Friendly`: token names such as `INT_LITERAL` become `a number`, repeats in the expected set are removed,
+`'<EOF>'` becomes `the end of the file`), a lowercase first letter, and the span of the offending token. Lexical errors use `NIR0001`/`NIR0002`. Improving
 messages is a later task; correctness of position matters more than wording.
 
 ## 6. Syntax tree (`Nir.Compiler.Syntax`)
@@ -466,7 +483,8 @@ nir run <file.nir> [-- args...]     compile to a temp directory, then run it wit
 - `run` starts a child process `dotnet <temp>/<name>.dll` with stdin/stdout/stderr inherited, and returns the child's
   exit code. The temp directory is deleted afterwards. In-process loading is deliberately not used (isolated, simpler to
   test); it can be an optimization later.
-- Diagnostics go to stderr, in the printed form from section 4. Program output is never mixed with them.
+- Diagnostics go to stderr, in the printed form from section 4 (Rust style, coloured on a terminal). Program output is
+  never mixed with them.
 - Exit codes: `0` success; `1` compile errors; `2` usage error (bad arguments, file not found); `3` internal compiler
   error (unhandled exception; print `internal compiler error: <message>` and the stack trace to stderr).
 - Argument parsing is hand-written in `CommandLineArguments.cs`; no third-party package.

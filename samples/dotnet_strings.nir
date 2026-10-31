@@ -1,0 +1,17 @@
+// Calling methods on values: strings, numbers and booleans.
+fn main() {
+    let text = "  Hello, Nir  "
+    print(text.Trim())
+    print(text.Trim().ToUpper())
+    print(text.Trim().ToLower())
+    print(text.Contains("Nir"))
+    print(text.Trim().Substring(7))
+    print(text.IndexOf("Nir"))
+    print(text.Replace("Nir", "World").Trim())
+
+    print(42.ToString())
+    print(2.5.ToString())
+    print(true.ToString())
+    print((10 + 5).ToString())
+    print(10.CompareTo(5))
+}

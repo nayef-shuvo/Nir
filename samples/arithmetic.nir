@@ -1,0 +1,20 @@
+// Variables, numbers and operators.
+fn main() {
+    let width = 12
+    let height = 5
+    let mut area = width * height
+    print(area)
+
+    area = area + 10
+    print(area)
+
+    let ratio = 7.5 / 2.0
+    print(ratio)
+
+    print(10 / 3)          // integer division: 3
+    print(10 % 3)          // remainder: 1
+    print(-width + 1)
+    print(width > height)  // True
+    print(width == 12)     // True
+    print((2 + 3) * 4)     // parentheses: 20
+}

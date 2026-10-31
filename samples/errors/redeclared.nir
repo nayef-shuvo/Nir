@@ -1,0 +1,5 @@
+// Expect: NIR2005 "'x' is already declared in this block" on line 4.
+fn main() {
+    let x = 1
+    let x = 2
+}
