@@ -96,8 +96,24 @@ internal sealed partial class ProgramBinder
             return value;
         }
 
-        return expected is UnionTypeSymbol union && union.IndexOf(value.Type) is var index and >= 0
-            ? new BoundUnionWrap(value, union, index)
+        // A declared error is an anyerror (and so may be the error of an anyerror!T).
+        if (expected is AnyErrorTypeSymbol && IsDeclaredError(value.Type))
+        {
+            return new BoundErrorToAny(value);
+        }
+
+        if (expected is not UnionTypeSymbol union)
+        {
+            return null;
+        }
+
+        if (union.IndexOf(value.Type) is var index and >= 0)
+        {
+            return new BoundUnionWrap(value, union, index);
+        }
+
+        return union is ResultTypeSymbol { Error: AnyErrorTypeSymbol } && IsDeclaredError(value.Type)
+            ? new BoundUnionWrap(new BoundErrorToAny(value), union, 0)
             : null;
     }
 
@@ -108,6 +124,13 @@ internal sealed partial class ProgramBinder
         var scrutinee = BindExpression(match.Scrutinee);
         var union = scrutinee.Type as UnionTypeSymbol;
         var failed = scrutinee.Type == TypeSymbol.ErrorType;
+        if (union is ResultTypeSymbol { Success: null })
+        {
+            Error(DiagnosticCodes.MatchOnNonUnion, $"cannot match on '{union}' because success carries no value; use 'catch' instead", match.Scrutinee.Span);
+            union = null;
+            failed = true;
+        }
+
         if (union is null && !failed)
         {
             Error(DiagnosticCodes.MatchOnNonUnion, $"cannot match on a value of type '{scrutinee.Type}'; only a union can be matched", match.Scrutinee.Span);

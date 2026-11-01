@@ -1,0 +1,7 @@
+// Expect: NIR3021 "match on 'anyerror!int' does not cover 'anyerror'" on line 6.
+fn f() -> anyerror!int {
+    return 1
+}
+fn main() {
+    let n = match f() { v: int => v }
+}

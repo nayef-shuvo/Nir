@@ -20,6 +20,12 @@ internal sealed partial class ProgramBinder
                 continue;
             }
 
+            if (owner.IsError)
+            {
+                Error(DiagnosticCodes.NotAStruct, $"cannot add methods to the error type '{owner.Name}' yet", impl.TypeName.Span);
+                continue;
+            }
+
             foreach (var method in impl.Methods)
             {
                 if (owner.FindMethod(method.Name.Text) is not null)

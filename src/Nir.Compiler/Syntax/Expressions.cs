@@ -19,6 +19,21 @@ public sealed record FieldInitializer(Identifier Name, Expression Value, TextSpa
 /// <summary><c>(1, 2.5)</c>: two or more values.</summary>
 public sealed record TupleLiteralExpression(ImmutableArray<Expression> Elements, TextSpan Span) : Expression(Span);
 
+/// <summary><c>error ParseError { message = "x" }</c>: makes a value of an error type.</summary>
+public sealed record ErrorLiteralExpression(Identifier TypeName, ImmutableArray<FieldInitializer> Fields, TextSpan Span) : Expression(Span);
+
+/// <summary><c>error "text"</c>: makes an <c>anyerror</c> from a message.</summary>
+public sealed record ErrorMessageExpression(Expression Message, TextSpan Span) : Expression(Span);
+
+/// <summary><c>try operand</c>: the value, or return the error from the function.</summary>
+public sealed record TryExpression(Expression Operand, TextSpan Span) : Expression(Span);
+
+/// <summary>
+/// <c>operand catch fallback</c> (<paramref name="Value"/>), <c>operand catch e =&gt; expression</c> (<paramref name="Name"/> and
+/// <paramref name="Value"/>) or <c>operand catch e =&gt; { block }</c> (<paramref name="Name"/> and <paramref name="Block"/>).
+/// </summary>
+public sealed record CatchExpression(Expression Operand, Identifier? Name, Expression? Value, Block? Block, TextSpan Span) : Expression(Span);
+
 /// <summary><c>match value { name: Type => body, ... }</c>.</summary>
 public sealed record MatchExpression(Expression Scrutinee, ImmutableArray<MatchArm> Arms, TextSpan Span) : Expression(Span);
 

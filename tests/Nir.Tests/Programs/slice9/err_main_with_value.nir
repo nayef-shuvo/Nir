@@ -1,0 +1,3 @@
+fn main() -> anyerror!int {
+    return 1
+}

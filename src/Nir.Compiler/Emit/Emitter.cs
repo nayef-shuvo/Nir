@@ -27,6 +27,7 @@ public static class Emitter
         var type = module.DefineType("Program", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
 
         var context = new EmitContext();
+        DefineAnyError(module, context);
         DefineStructTypes(program, module, context);
         DefineUnionTypes(program, module, context);
         DefineStructFields(program, context);
@@ -58,9 +59,20 @@ public static class Emitter
             {
                 il.Emit(OpCodes.Ret);
             }
+            else if (function.Symbol.ReturnType is ResultTypeSymbol { Success: null } unitResult)
+            {
+                // An `E!` function whose body ends without a `return` succeeds.
+                new BodyEmitter(il, context, function.Symbol).EmitUnitSuccess(unitResult);
+                il.Emit(OpCodes.Ret);
+            }
         }
 
+        var entry = program.EntryPoint.ReturnType is ResultTypeSymbol entryResult
+            ? DefineErrorEntry(type, context, context.Methods[program.EntryPoint], entryResult)
+            : context.Methods[program.EntryPoint];
+
         type.CreateType();
+        context.AnyError.CreateType(); // before the error types that derive from it
         foreach (var structType in context.Structs.Values)
         {
             structType.CreateType();
@@ -77,7 +89,7 @@ public static class Emitter
             metadataRootBuilder: new MetadataRootBuilder(metadata),
             ilStream: ilStream,
             mappedFieldData: fieldData,
-            entryPoint: MetadataTokens.MethodDefinitionHandle(context.Methods[program.EntryPoint].MetadataToken));
+            entryPoint: MetadataTokens.MethodDefinitionHandle(entry.MetadataToken));
 
         var peImage = new BlobBuilder();
         peBuilder.Serialize(peImage);
@@ -89,6 +101,59 @@ public static class Emitter
         RuntimeConfigWriter.Write(Path.Combine(outputDirectory, assemblyName + ".runtimeconfig.json"));
     }
 
+    // The class every error derives from, which is what `anyerror` is: an object with a message.
+    private static void DefineAnyError(ModuleBuilder module, EmitContext context)
+    {
+        var anyError = module.DefineType("Nir.AnyError", TypeAttributes.Public | TypeAttributes.Class, ClrUniverse.CoreType("System.Object"));
+        context.AnyError = anyError;
+        context.AnyErrorMessage = anyError.DefineField("Message", ClrUniverse.CoreType("System.String"), FieldAttributes.Public);
+        context.AnyErrorConstructor = DefineConstructor(anyError, ClrUniverse.CoreType("System.Object").GetConstructor(Type.EmptyTypes)!);
+    }
+
+    // A public constructor that only calls the base constructor.
+    private static ConstructorBuilder DefineConstructor(TypeBuilder type, ConstructorInfo baseConstructor)
+    {
+        var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var il = constructor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, baseConstructor);
+        il.Emit(OpCodes.Ret);
+        return constructor;
+    }
+
+    // When `main` returns an `E!`, the real entry point is a `Main` that runs it, prints `error: <message>` to stderr if it failed
+    // and exits with 1.
+    private static MethodBuilder DefineErrorEntry(TypeBuilder program, EmitContext context, MethodInfo userMain, ResultTypeSymbol result)
+    {
+        var layout = context.Unions[result];
+        var text = ClrUniverse.CoreType("System.String");
+        var main = program.DefineMethod("Main", MethodAttributes.Public | MethodAttributes.Static, ClrUniverse.CoreType("System.Int32"), Type.EmptyTypes);
+        var il = main.GetILGenerator();
+        var outcome = il.DeclareLocal(layout.Type);
+        var succeeded = il.DefineLabel();
+
+        il.Emit(OpCodes.Call, userMain);
+        il.Emit(OpCodes.Stloc, outcome);
+        il.Emit(OpCodes.Ldloca, outcome);
+        il.Emit(OpCodes.Ldfld, layout.Tag);
+        il.Emit(OpCodes.Brtrue, succeeded);
+
+        il.Emit(OpCodes.Call, ClrUniverse.FindType("System.Console")!.GetProperty("Error")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "error: ");
+        il.Emit(OpCodes.Ldloca, outcome);
+        il.Emit(OpCodes.Ldfld, layout.Cases[0]);
+        il.Emit(OpCodes.Ldfld, context.AnyErrorMessage);
+        il.Emit(OpCodes.Call, text.GetMethod("Concat", [text, text])!);
+        il.Emit(OpCodes.Callvirt, ClrUniverse.FindType("System.IO.TextWriter")!.GetMethod("WriteLine", [text])!);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(succeeded);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        return main;
+    }
+
     // Each struct is a public sealed CLR value type with public fields, so C# can see it. All the types are defined before any
     // field, because a field may be of a struct, union or tuple that is declared further down.
     private static void DefineStructTypes(BoundProgram program, ModuleBuilder module, EmitContext context)
@@ -96,6 +161,15 @@ public static class Emitter
         var valueType = ClrUniverse.CoreType("System.ValueType");
         foreach (var structSymbol in program.Structs)
         {
+            if (structSymbol.IsError)
+            {
+                // An error is a class that derives from AnyError, so every error can be used as an anyerror.
+                var errorClass = module.DefineType(structSymbol.Name, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class, context.AnyError);
+                context.Structs[structSymbol] = errorClass;
+                context.ErrorConstructors[structSymbol] = DefineConstructor(errorClass, context.AnyErrorConstructor);
+                continue;
+            }
+
             context.Structs[structSymbol] = module.DefineType(
                 structSymbol.Name,
                 TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.SequentialLayout,
@@ -311,6 +385,33 @@ public static class Emitter
                     EmitUnionWrap(wrap);
                     break;
 
+                case BoundErrorLiteral errorLiteral:
+                    EmitErrorLiteral(errorLiteral);
+                    break;
+
+                case BoundErrorMessage errorMessage:
+                    il.Emit(OpCodes.Newobj, context.AnyErrorConstructor);
+                    il.Emit(OpCodes.Dup);
+                    EmitExpression(errorMessage.Message);
+                    il.Emit(OpCodes.Stfld, context.AnyErrorMessage);
+                    break;
+
+                case BoundErrorToAny toAny:
+                    EmitExpression(toAny.Value); // every error object already is an AnyError
+                    break;
+
+                case BoundUnitSuccess unitSuccess:
+                    EmitUnitSuccess(unitSuccess.Result);
+                    break;
+
+                case BoundTry tryExpression:
+                    EmitTry(tryExpression);
+                    break;
+
+                case BoundCatch catchExpression:
+                    EmitCatch(catchExpression);
+                    break;
+
                 case BoundMatch match:
                     EmitMatch(match);
                     break;
@@ -405,6 +506,11 @@ public static class Emitter
         {
             switch (place)
             {
+                // An error is an object: its reference is what a field access needs, not the address of the variable holding it.
+                case { Type: StructTypeSymbol { IsError: true } or AnyErrorTypeSymbol }:
+                    EmitExpression(place);
+                    break;
+
                 // A borrow already is an address (a managed pointer), so it is loaded, not addressed.
                 case BoundVariableExpression variable when variable.Variable.Type is BorrowTypeSymbol:
                     il.Emit(OpCodes.Ldarg, _arguments[variable.Variable]);
@@ -451,6 +557,144 @@ public static class Emitter
             EmitExpression(wrap.Value);
             il.Emit(OpCodes.Stfld, layout.Cases[wrap.Index]);
             il.Emit(OpCodes.Ldloc, temporary);
+        }
+
+        // The object is built, its fields are set in the order written, and its Message is taken from the field called `message`
+        // if there is one, else it is the name of the type.
+        private void EmitErrorLiteral(BoundErrorLiteral literal)
+        {
+            var error = il.DeclareLocal(context.ClrOf(literal.Error));
+            il.Emit(OpCodes.Newobj, context.ErrorConstructors[literal.Error]);
+            il.Emit(OpCodes.Stloc, error);
+            foreach (var initializer in literal.Initializers)
+            {
+                il.Emit(OpCodes.Ldloc, error);
+                EmitExpression(initializer.Value);
+                il.Emit(OpCodes.Stfld, context.Fields[initializer.Field]);
+            }
+
+            il.Emit(OpCodes.Ldloc, error);
+            if (literal.Error.FindField("message") is { } message && message.Type == TypeSymbol.StringType)
+            {
+                il.Emit(OpCodes.Ldloc, error);
+                il.Emit(OpCodes.Ldfld, context.Fields[message]);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldstr, literal.Error.Name);
+            }
+
+            il.Emit(OpCodes.Stfld, context.AnyErrorMessage);
+            il.Emit(OpCodes.Ldloc, error);
+        }
+
+        // A zeroed result has tag 0, the error; success is tag 1.
+        public void EmitUnitSuccess(ResultTypeSymbol result)
+        {
+            var layout = context.Unions[result];
+            var temporary = il.DeclareLocal(layout.Type);
+            il.Emit(OpCodes.Ldloca, temporary);
+            il.Emit(OpCodes.Initobj, layout.Type);
+            il.Emit(OpCodes.Ldloca, temporary);
+            il.Emit(OpCodes.Ldc_I4, ResultTypeSymbol.SuccessTag);
+            il.Emit(OpCodes.Stfld, layout.Tag);
+            il.Emit(OpCodes.Ldloc, temporary);
+        }
+
+        // On an error, return it from the function (as the function's own result type); on a success, the value is left on the stack.
+        private void EmitTry(BoundTry tryExpression)
+        {
+            var operandType = (ResultTypeSymbol)tryExpression.Operand.Type;
+            var layout = context.Unions[operandType];
+            EmitExpression(tryExpression.Operand);
+            var outcome = il.DeclareLocal(layout.Type);
+            il.Emit(OpCodes.Stloc, outcome);
+
+            var succeeded = il.DefineLabel();
+            il.Emit(OpCodes.Ldloca, outcome);
+            il.Emit(OpCodes.Ldfld, layout.Tag);
+            il.Emit(OpCodes.Brtrue, succeeded);
+
+            if (tryExpression.FunctionResult == operandType)
+            {
+                il.Emit(OpCodes.Ldloc, outcome);
+            }
+            else
+            {
+                // The function's error type is wider (anyerror): build its result with the same error.
+                var own = context.Unions[tryExpression.FunctionResult];
+                var widened = il.DeclareLocal(own.Type);
+                il.Emit(OpCodes.Ldloca, widened);
+                il.Emit(OpCodes.Initobj, own.Type);
+                il.Emit(OpCodes.Ldloca, widened);
+                il.Emit(OpCodes.Ldloca, outcome);
+                il.Emit(OpCodes.Ldfld, layout.Cases[0]);
+                il.Emit(OpCodes.Stfld, own.Cases[0]);
+                il.Emit(OpCodes.Ldloc, widened);
+            }
+
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(succeeded);
+            if (tryExpression.ValueType != TypeSymbol.UnitType)
+            {
+                il.Emit(OpCodes.Ldloca, outcome);
+                il.Emit(OpCodes.Ldfld, layout.Cases[ResultTypeSymbol.SuccessTag]);
+            }
+        }
+
+        // The result is stored once. On a success its value is the value of the catch; on an error the handler runs (with the error
+        // in its variable): a value to use, or a block, which has returned or has nothing to produce.
+        private void EmitCatch(BoundCatch catchExpression)
+        {
+            var operandType = (ResultTypeSymbol)catchExpression.Operand.Type;
+            var layout = context.Unions[operandType];
+            EmitExpression(catchExpression.Operand);
+            var outcome = il.DeclareLocal(layout.Type);
+            il.Emit(OpCodes.Stloc, outcome);
+
+            var value = catchExpression.ValueType == TypeSymbol.UnitType ? null : il.DeclareLocal(context.ClrOf(catchExpression.ValueType));
+            var succeeded = il.DefineLabel();
+            var end = il.DefineLabel();
+            il.Emit(OpCodes.Ldloca, outcome);
+            il.Emit(OpCodes.Ldfld, layout.Tag);
+            il.Emit(OpCodes.Brtrue, succeeded);
+
+            if (catchExpression.Variable is { } variable)
+            {
+                var local = il.DeclareLocal(context.ClrOf(variable.Type));
+                _locals[variable] = local;
+                il.Emit(OpCodes.Ldloca, outcome);
+                il.Emit(OpCodes.Ldfld, layout.Cases[0]);
+                il.Emit(OpCodes.Stloc, local);
+            }
+
+            if (catchExpression.Value is { } handler)
+            {
+                EmitExpression(handler);
+                if (value is not null)
+                {
+                    il.Emit(OpCodes.Stloc, value);
+                }
+            }
+            else
+            {
+                EmitBlock(catchExpression.Body!);
+            }
+
+            il.Emit(OpCodes.Br, end);
+            il.MarkLabel(succeeded);
+            if (value is not null)
+            {
+                il.Emit(OpCodes.Ldloca, outcome);
+                il.Emit(OpCodes.Ldfld, layout.Cases[ResultTypeSymbol.SuccessTag]);
+                il.Emit(OpCodes.Stloc, value);
+            }
+
+            il.MarkLabel(end);
+            if (value is not null)
+            {
+                il.Emit(OpCodes.Ldloc, value);
+            }
         }
 
         // The union is stored once. Each arm tests the tag; the last needs no test because the binder checked that the arms

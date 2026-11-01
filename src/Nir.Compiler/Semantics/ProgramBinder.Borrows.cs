@@ -15,7 +15,7 @@ internal sealed partial class ProgramBinder
             return ResolveTypeSyntax(syntax);
         }
 
-        if (StructNamed(reference.Name) is { } owner)
+        if (StructNamed(reference.Name) is { IsError: false } owner)
         {
             return owner.BorrowOf(reference.Borrow == BorrowKind.Mutable);
         }
@@ -54,7 +54,7 @@ internal sealed partial class ProgramBinder
             return place;
         }
 
-        if (StructOf(place.Type) is not { } owner)
+        if (StructOf(place.Type) is not { IsError: false } owner)
         {
             Error(
                 DiagnosticCodes.BorrowOfNonStruct,

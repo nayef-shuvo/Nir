@@ -54,7 +54,7 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
             .Select(BindFunction)
             .ToImmutableArray();
 
-        return _hadError || entryPoint is null ? null : new BoundProgram([.. _structs.Values], [.. _unionOrder], functions, entryPoint);
+        return _hadError || entryPoint is null ? null : new BoundProgram([.. _structs.Values], [.. _unionOrder, .. _resultOrder], functions, entryPoint);
     }
 
     // Resolves a function's signature. This happens for every function before any body is bound.
@@ -66,9 +66,9 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
             .Select(p => new VariableSymbol(p.Name.Text, ResolveParameterType(p.Type), isMutable: false))
             .ToImmutableArray();
 
-        if (owner is null && declaration.Name.Text == "main" && (declaration.ReturnType is not null || parameters.Length > 0))
+        if (owner is null && declaration.Name.Text == "main" && ((declaration.ReturnType is not null && returnType is not ResultTypeSymbol { Success: null } && returnType != TypeSymbol.ErrorType) || parameters.Length > 0))
         {
-            Error(DiagnosticCodes.InvalidEntryPoint, "'main' must have no parameters and no return type", declaration.Name.Span);
+            Error(DiagnosticCodes.InvalidEntryPoint, "'main' must have no parameters and return nothing, or 'E!' for an error type E", declaration.Name.Span);
         }
 
         if (owner is null && declaration.Receiver is { } receiverSyntax)
@@ -105,7 +105,7 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
 
         var body = BindStatements(declaration.Body);
 
-        var mustReturn = function.ReturnType != TypeSymbol.UnitType && function.ReturnType != TypeSymbol.ErrorType;
+        var mustReturn = function.ReturnType != TypeSymbol.UnitType && function.ReturnType != TypeSymbol.ErrorType && function.ReturnType is not ResultTypeSymbol { Success: null };
         if (mustReturn && !BoundFlow.AlwaysReturns(body))
         {
             Error(DiagnosticCodes.MissingReturn, $"'{function.Name}' does not return a value on every path", declaration.Name.Span);
@@ -147,7 +147,7 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
     private BoundStatement BindStatement(Statement statement) => statement switch
     {
         ExpressionStatement { Expression: MatchExpression match } => new BoundExpressionStatement(BindMatch(match, isStatement: true)),
-        ExpressionStatement s => new BoundExpressionStatement(BindExpression(s.Expression)),
+        ExpressionStatement s => new BoundExpressionStatement(BindStatementValue(s.Expression)),
         VariableDeclaration d => BindVariableDeclaration(d),
         DestructuringDeclaration d => BindDestructuring(d),
         AssignmentStatement a => BindAssignment(a),

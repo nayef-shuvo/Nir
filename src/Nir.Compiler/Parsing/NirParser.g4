@@ -35,7 +35,7 @@ topLevelItem
 
 // Fields are separated by a comma or a newline; the last separator is optional.
 structDeclaration
-    : TYPE name=IDENTIFIER EQ STRUCT LBRACE fieldList? RBRACE
+    : TYPE name=IDENTIFIER EQ kind=(STRUCT | ERROR) LBRACE fieldList? RBRACE
     ;
 
 fieldList
@@ -61,9 +61,10 @@ unionMember
     ;
 
 // A type is a plain identifier or a tuple type. Which names are types is decided by the binder.
+// `E!T` is "an error of type E, or a T"; `E!` is "an error of type E, or nothing".
 typeSyntax
     : tupleType
-    | name=IDENTIFIER
+    | name=IDENTIFIER (BANG success=typeSyntax?)?
     ;
 
 // Two or more elements, each optionally named: `(int, double)`, `(x: int, y: int)`.
@@ -201,10 +202,14 @@ assignmentTarget
 // Alternatives are listed from highest to lowest precedence (ANTLR's rule for left-recursive rules), and all
 // binary operators are left-associative.
 expression
-    : receiver=expression DOT method=IDENTIFIER LPAREN argumentList? RPAREN  # memberCallExpression
+    // Listed first so that `error Name { ... }` is an error literal and not `error` applied to a struct literal.
+    : {_structLiteralsForbidden == 0}? ERROR typeName=IDENTIFIER LBRACE fieldInitializerList? RBRACE   # errorLiteralExpr
+    | receiver=expression DOT method=IDENTIFIER LPAREN argumentList? RPAREN  # memberCallExpression
     | receiver=expression DOT field=IDENTIFIER                          # fieldAccessExpression
     | receiver=expression DOT index=(INT_LITERAL | DOUBLE_LITERAL)      # tupleIndexExpression
     | op=(MINUS | BANG) operand=expression                              # unaryExpression
+    | TRY operand=expression                                            # tryExpression
+    | ERROR message=expression                                          # errorMessageExpression
     | AMP MUT? operand=expression                                       # referenceExpression
     | operand=expression AS targetType=IDENTIFIER                       # castExpression
     | left=expression op=(STAR | SLASH | PERCENT) right=expression      # multiplicativeExpression
@@ -213,6 +218,9 @@ expression
     | left=expression op=(EQEQ | NEQ) right=expression                  # equalityExpression
     | left=expression op=AMPAMP right=expression                        # logicalAndExpression
     | left=expression op=PIPEPIPE right=expression                      # logicalOrExpression
+    | left=expression CATCH name=IDENTIFIER FATARROW handler=expression # catchHandlerExpression
+    | left=expression CATCH name=IDENTIFIER FATARROW body=block         # catchBlockExpression
+    | left=expression CATCH fallback=expression                         # catchFallbackExpression
     | callExpression                                                    # callExpr
     | MATCH {_structLiteralsForbidden++;} scrutinee=expression {_structLiteralsForbidden--;} LBRACE
       {_savedStructLiteralsForbidden.Push(_structLiteralsForbidden); _structLiteralsForbidden = 0;}

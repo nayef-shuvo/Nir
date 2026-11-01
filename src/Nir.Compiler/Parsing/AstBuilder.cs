@@ -70,7 +70,7 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
             .Select(f => new FieldDeclaration(f.Name!, f.Type!, SpanOf(f.Context)))
             .ToImmutableArray();
 
-        return new StructDeclaration(name, fields, SpanOf(context));
+        return new StructDeclaration(name, fields, context.kind?.Type == NirParser.ERROR, SpanOf(context));
     }
 
     private TupleAliasDeclaration? BuildTupleAlias(NirParser.TupleAliasDeclarationContext context)
@@ -100,7 +100,18 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         }
 
         var name = BuildIdentifier(context.name);
-        return name is null ? null : new TypeReference(name, BorrowKind.None, SpanOf(context));
+        if (name is null)
+        {
+            return null;
+        }
+
+        if (context.BANG() is null)
+        {
+            return new TypeReference(name, BorrowKind.None, SpanOf(context));
+        }
+
+        var success = context.success is null ? null : BuildTypeSyntax(context.success);
+        return context.success is not null && success is null ? null : new ResultTypeSyntax(name, success, SpanOf(context));
     }
 
     private static TupleTypeSyntax? BuildTupleType(NirParser.TupleTypeContext? context)
@@ -399,6 +410,12 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         NirParser.TupleIndexExpressionContext t => BuildExpression(t.receiver) is { } receiver && !IsMissing(t.index) ? AddFieldAccesses(receiver, t.index) : null,
         NirParser.TupleLiteralExprContext t => BuildTupleLiteral(t),
         NirParser.MatchExprContext m => BuildMatch(m),
+        NirParser.TryExpressionContext t => BuildExpression(t.operand) is { } tried ? new TryExpression(tried, SpanOf(t)) : null,
+        NirParser.ErrorMessageExpressionContext e => BuildExpression(e.message) is { } message ? new ErrorMessageExpression(message, SpanOf(e)) : null,
+        NirParser.ErrorLiteralExprContext e => BuildErrorLiteral(e),
+        NirParser.CatchFallbackExpressionContext c => BuildCatch(c, c.left, null, c.fallback, null),
+        NirParser.CatchHandlerExpressionContext c => BuildCatch(c, c.left, c.name, c.handler, null),
+        NirParser.CatchBlockExpressionContext c => BuildCatch(c, c.left, c.name, null, c.body),
         NirParser.ReferenceExpressionContext r => BuildReference(r),
         NirParser.SelfExprContext s => new SelfExpression(SpanOf(s)),
         NirParser.StructLiteralExprContext l => BuildStructLiteral(l),
@@ -464,6 +481,42 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         var receiver = BuildExpression(context.receiver);
         var field = BuildIdentifier(context.field);
         return receiver is null || field is null ? null : new FieldAccessExpression(receiver, field, SpanOf(context));
+    }
+
+    private CatchExpression? BuildCatch(
+        NirParser.ExpressionContext context,
+        NirParser.ExpressionContext? operandContext,
+        IToken? nameToken,
+        NirParser.ExpressionContext? valueContext,
+        NirParser.BlockContext? blockContext)
+    {
+        var operand = BuildExpression(operandContext);
+        var name = nameToken is null ? null : BuildIdentifier(nameToken);
+        var value = valueContext is null ? null : BuildExpression(valueContext);
+        var block = blockContext is null ? null : BuildBlock(blockContext);
+        if (operand is null || (nameToken is not null && name is null) || (value is null && block is null))
+        {
+            return null;
+        }
+
+        return new CatchExpression(operand, name, value, block, SpanOf(context));
+    }
+
+    private ErrorLiteralExpression? BuildErrorLiteral(NirParser.ErrorLiteralExprContext context)
+    {
+        var typeName = BuildIdentifier(context.typeName);
+        if (typeName is null)
+        {
+            return null;
+        }
+
+        var fields = (context.fieldInitializerList()?.fieldInitializer() ?? [])
+            .Select(initializer => (Name: BuildIdentifier(initializer.name), Value: BuildExpression(initializer.value), Context: initializer))
+            .Where(f => f.Name is not null && f.Value is not null)
+            .Select(f => new FieldInitializer(f.Name!, f.Value!, SpanOf(f.Context)))
+            .ToImmutableArray();
+
+        return new ErrorLiteralExpression(typeName, fields, SpanOf(context));
     }
 
     private MatchExpression? BuildMatch(NirParser.MatchExprContext context)

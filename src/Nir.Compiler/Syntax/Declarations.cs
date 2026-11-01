@@ -12,8 +12,8 @@ public sealed record CompilationUnit(
     ImmutableArray<FunctionDeclaration> Functions,
     TextSpan Span) : SyntaxNode(Span);
 
-/// <summary><c>type Name = struct { field: type, ... }</c>.</summary>
-public sealed record StructDeclaration(Identifier Name, ImmutableArray<FieldDeclaration> Fields, TextSpan Span) : SyntaxNode(Span);
+/// <summary><c>type Name = struct { field: type, ... }</c>, or with <c>error</c> in place of <c>struct</c> (<paramref name="IsError"/>).</summary>
+public sealed record StructDeclaration(Identifier Name, ImmutableArray<FieldDeclaration> Fields, bool IsError, TextSpan Span) : SyntaxNode(Span);
 
 public sealed record FieldDeclaration(Identifier Name, TypeSyntax Type, TextSpan Span) : SyntaxNode(Span);
 
@@ -64,6 +64,12 @@ public abstract record TypeSyntax(TextSpan Span) : SyntaxNode(Span)
 public sealed record TypeReference(Identifier Name, BorrowKind Borrow, TextSpan Span) : TypeSyntax(Span)
 {
     public override string Text => Borrow switch { BorrowKind.Shared => "&" + Name.Text, BorrowKind.Mutable => "&mut " + Name.Text, _ => Name.Text };
+}
+
+/// <summary><c>E!T</c> (<paramref name="Success"/> set) or <c>E!</c> (success carries nothing): an error of type E, or a T.</summary>
+public sealed record ResultTypeSyntax(Identifier Error, TypeSyntax? Success, TextSpan Span) : TypeSyntax(Span)
+{
+    public override string Text => Error.Text + "!" + Success?.Text;
 }
 
 /// <summary><c>(int, double)</c> or <c>(x: int, y: int)</c>.</summary>

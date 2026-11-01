@@ -55,6 +55,31 @@ public sealed record BoundStructLiteral(StructTypeSymbol Struct, ImmutableArray<
 
 public sealed record BoundFieldInitializer(FieldSymbol Field, BoundExpression Value);
 
+/// <summary><c>error E { ... }</c>: a new error object (a class instance) with its fields set in the order written.</summary>
+public sealed record BoundErrorLiteral(StructTypeSymbol Error, ImmutableArray<BoundFieldInitializer> Initializers) : BoundExpression(Error);
+
+/// <summary><c>error "text"</c>: a new anyerror with this message.</summary>
+public sealed record BoundErrorMessage(BoundExpression Message) : BoundExpression(AnyErrorTypeSymbol.Instance);
+
+/// <summary>A declared error seen as an <c>anyerror</c>. Costs nothing: every error object already is one.</summary>
+public sealed record BoundErrorToAny(BoundExpression Value) : BoundExpression(AnyErrorTypeSymbol.Instance);
+
+/// <summary>The success of an <c>E!</c>, which carries no value (a bare <c>return</c>, or the end of the function).</summary>
+public sealed record BoundUnitSuccess(ResultTypeSymbol Result) : BoundExpression(Result);
+
+/// <summary>
+/// <c>try operand</c>: the value of a success; on an error, returns it from the function, whose result type is
+/// <paramref name="FunctionResult"/>. <paramref name="ValueType"/> is <c>()</c> when success carries nothing.
+/// </summary>
+public sealed record BoundTry(BoundExpression Operand, ResultTypeSymbol FunctionResult, TypeSymbol ValueType) : BoundExpression(ValueType);
+
+/// <summary>
+/// <c>operand catch ...</c>: the value of a success; on an error, runs the handler, which is a <paramref name="Value"/> to use or a
+/// <paramref name="Body"/> to run. <paramref name="Variable"/> holds the error (null if unused or <c>_</c>).
+/// </summary>
+public sealed record BoundCatch(BoundExpression Operand, VariableSymbol? Variable, BoundExpression? Value, BoundBlock? Body, TypeSymbol ValueType)
+    : BoundExpression(ValueType);
+
 /// <summary>A value of a member type turned into the union: the tag <paramref name="Index"/> and the value.</summary>
 public sealed record BoundUnionWrap(BoundExpression Value, UnionTypeSymbol Union, int Index) : BoundExpression(Union);
 

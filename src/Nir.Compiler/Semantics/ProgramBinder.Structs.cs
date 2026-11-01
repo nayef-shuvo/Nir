@@ -122,6 +122,7 @@ internal sealed partial class ProgramBinder
     // The structs a value of this type holds directly: itself, or the ones inside a tuple.
     private static IEnumerable<StructTypeSymbol> StructsInside(TypeSymbol type) => type switch
     {
+        StructTypeSymbol { IsError: true } => [], // an error is a class: it holds other values by reference, not inside itself
         StructTypeSymbol structType => [structType],
         TupleTypeSymbol tuple => tuple.Elements.SelectMany(element => StructsInside(element.Type)),
         UnionTypeSymbol union => union.Members.SelectMany(StructsInside),
@@ -152,12 +153,24 @@ internal sealed partial class ProgramBinder
     private BoundExpression BindStructLiteral(StructLiteralExpression literal)
     {
         var structType = ResolveStructName(literal.TypeName);
+        if (structType is { IsError: true })
+        {
+            Error(DiagnosticCodes.ErrorLiteralForm, $"'{structType.Name}' is an error type; make one with 'error {structType.Name} {{ ... }}'", literal.TypeName.Span);
+            structType = null;
+        }
 
-        // Bind every value even when the type is bad, so mistakes inside them are reported too.
-        var values = literal.Fields.Select(field => (Field: field, Value: BindExpression(field.Value))).ToList();
+        var initializers = BindInitializers(structType, literal.TypeName, literal.Fields);
+        return structType is null || initializers is null ? new BoundErrorExpression() : new BoundStructLiteral(structType, initializers.Value);
+    }
+
+    // The values of a struct or error literal, checked against the fields of the type. Every value is bound even when the type is
+    // bad, so mistakes inside them are reported too. Null if anything was wrong (already reported).
+    private ImmutableArray<BoundFieldInitializer>? BindInitializers(StructTypeSymbol? structType, Identifier typeName, ImmutableArray<FieldInitializer> fields)
+    {
+        var values = fields.Select(field => (Field: field, Value: BindExpression(field.Value))).ToList();
         if (structType is null)
         {
-            return new BoundErrorExpression();
+            return null;
         }
 
         var failed = false;
@@ -195,11 +208,11 @@ internal sealed partial class ProgramBinder
         if (missing.Count > 0)
         {
             var noun = missing.Count == 1 ? "field" : "fields";
-            Error(DiagnosticCodes.MissingField, $"missing {noun} {string.Join(", ", missing)} in '{structType.Name}'", literal.TypeName.Span);
+            Error(DiagnosticCodes.MissingField, $"missing {noun} {string.Join(", ", missing)} in '{structType.Name}'", typeName.Span);
             failed = true;
         }
 
-        return failed ? new BoundErrorExpression() : new BoundStructLiteral(structType, initializers.ToImmutable());
+        return failed ? null : initializers.ToImmutable();
     }
 
     // `receiver.field`: the receiver must be a struct value.
@@ -214,7 +227,12 @@ internal sealed partial class ProgramBinder
         // A borrow of a struct is read through, so `self.x` works without writing a dereference.
         // A tuple element is reached the same way, by index (`t.0`) or, if it has one, by name.
         var owner = StructOf(receiver.Type);
-        var field = receiver.Type is TupleTypeSymbol tuple ? tuple.FindElement(access.Field.Text) : owner?.FindField(access.Field.Text);
+        var field = receiver.Type switch
+        {
+            TupleTypeSymbol tuple => tuple.FindElement(access.Field.Text),
+            AnyErrorTypeSymbol any => access.Field.Text == "message" ? any.Message : null,
+            _ => owner?.FindField(access.Field.Text),
+        };
         if (field is null)
         {
             Error(DiagnosticCodes.NoSuchMember, $"'{access.Field.Text}' is not a member of '{owner?.Name ?? receiver.Type.Name}'", access.Field.Span);
@@ -234,6 +252,15 @@ internal sealed partial class ProgramBinder
         }
 
         var text = PathText(assignment.Target);
+        for (BoundExpression step = access; step is BoundFieldAccess fieldStep; step = fieldStep.Receiver)
+        {
+            if (fieldStep.Receiver.Type is StructTypeSymbol { IsError: true } or AnyErrorTypeSymbol)
+            {
+                Error(DiagnosticCodes.NotMutable, $"cannot assign to '{text}' because error values cannot be changed", assignment.Target.Span);
+                return new BoundExpressionStatement(value);
+            }
+        }
+
         var root = BoundPlaces.Root(access);
         if (!BoundPlaces.IsMutable(root))
         {

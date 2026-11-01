@@ -1,0 +1,52 @@
+// Errors are values. `E!T` is "an error of type E, or a T"; `try` passes an error up; `catch` handles one on the spot.
+using clr::cs::System::Int32
+
+type ParseError = error { message: string, line: int }
+type RangeError = error { message: string, value: int }
+
+fn parse(text: string, line: int) -> ParseError!int {
+    if text == "" {
+        return error ParseError { message = "nothing to parse", line = line }
+    }
+    return Int32::Parse(text)
+}
+
+fn check(n: int) -> RangeError!int {
+    if n > 10 {
+        return error RangeError { message = $"{n} is above 10", value = n }
+    }
+    return n
+}
+
+// `anyerror` holds any error. `try` returns the error to the caller, widened to anyerror.
+fn load(text: string) -> anyerror!int {
+    let n = try parse(text, 1)
+    let small = try check(n)
+    return small * 2
+}
+
+fn describe(r: ParseError!int) {
+    match r {
+        n: int => print($"parsed {n}")
+        e: ParseError => print($"line {e.line}: {e.message}")
+    }
+}
+
+// A function that succeeds with nothing returns `E!`.
+fn validate(text: string) -> anyerror! {
+    if text == "bad" {
+        return error "that input is bad"
+    }
+}
+
+fn main() -> anyerror! {
+    print(parse("12", 1) catch 0)
+    describe(parse("", 7))
+    print(load("4") catch 0)
+
+    load("50") catch e => {
+        print($"load failed: {e.message}")
+        return
+    }
+    print("not reached")
+}

@@ -489,6 +489,14 @@ public class LexerTests
     }
 
     [Fact]
+    public void Error_try_and_catch_are_keywords_and_a_bang_before_a_newline_ends_a_statement()
+    {
+        Assert.Equal("ERROR TRY CATCH EOF", TokenFormatter.Names("error try catch"));
+        Assert.Equal("IDENTIFIER BANG SEMI IDENTIFIER COLON IDENTIFIER SEMI EOF", TokenFormatter.Names("E!\nb: int"));
+        Assert.Equal("IDENTIFIER NEQ IDENTIFIER SEMI EOF", TokenFormatter.Names("a != b"));
+    }
+
+    [Fact]
     public void A_fat_arrow_does_not_end_a_statement()
     {
         Assert.Equal("IDENTIFIER COLON IDENTIFIER FATARROW INT_LITERAL SEMI EOF", TokenFormatter.Names("a: A =>\n1"));

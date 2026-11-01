@@ -14,6 +14,9 @@ public sealed class StructTypeSymbol : TypeSymbol
 
     public StructDeclaration Declaration { get; }
 
+    /// <summary>True for <c>type E = error { ... }</c>: a class whose values cannot change, instead of a value type.</summary>
+    public bool IsError => Declaration.IsError;
+
     /// <summary>The fields in declaration order. Filled in once every struct name is known, because fields may use other structs.</summary>
     public ImmutableArray<FieldSymbol> Fields { get; internal set; } = [];
 

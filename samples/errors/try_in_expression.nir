@@ -1,0 +1,10 @@
+// Expect: NIR3026 "'try' can only be the whole value of a 'let', ..." on line 6.
+fn f() -> anyerror!int {
+    return 1
+}
+fn g() -> anyerror!int {
+    let x = 1 + try f()
+    return x
+}
+fn main() {
+}

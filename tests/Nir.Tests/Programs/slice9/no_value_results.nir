@@ -1,0 +1,18 @@
+fn step(n: int) -> anyerror! {
+    print($"step {n}")
+    if n == 3 {
+        return error "three is not allowed"
+    }
+}
+
+fn run() -> anyerror! {
+    for i in 1..6 {
+        try step(i)
+    }
+}
+
+fn main() -> anyerror! {
+    run() catch e => print($"stopped: {e.message}")
+    try step(1)
+    print("done")
+}

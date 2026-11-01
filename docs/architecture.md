@@ -179,6 +179,8 @@ Codes defined so far (slices 1 to 7; the message text in `DiagnosticCodes` call 
 | NIR2020 | tuple alias or union defined in terms of itself | `type '{name}' is defined in terms of itself` |
 | NIR2021 | union lists the same type twice | `'{type}' is listed twice in union '{name}'` |
 | NIR2022 | union member is a union | `a union cannot contain another union ('{name}') yet; list its members instead` |
+| NIR2023 | type before `!` is not an error type | `the type before '!' must be an error type or 'anyerror', but '{type}' is not one` |
+| NIR2024 | type after `!` is an error or a result | `the value after '!' cannot be an error or a result, but '{type}' is one` |
 | NIR3013 | `&mut self` method called on a temporary | `cannot call '{method}' on a temporary because it changes its receiver` |
 | NIR3014 | borrow anywhere but a direct argument to a Nir function or method | `a borrow can only be passed directly as an argument to a function or method written in Nir` |
 | NIR3015 | borrow of something other than a whole variable | `only a whole variable can be borrowed, not a field or another expression` |
@@ -188,6 +190,12 @@ Codes defined so far (slices 1 to 7; the message text in `DiagnosticCodes` call 
 | NIR3020 | two arms for one member | `case '{type}' is already handled by an earlier arm` |
 | NIR3021 | match leaves out members | `match on '{union}' does not cover '{a}', '{b}'` |
 | NIR3022 | block arm in a match whose value is used | `a match whose value is used needs an expression in every arm; use it as a statement to have blocks` |
+| NIR3023 | `try` in a function that does not return an `E!T` | `'try' returns the error to the caller, but '{f}' returns '{type}'; make it return an 'E!T' or handle the error with 'catch'` |
+| NIR3024 | `try` of an error the function cannot hold | `'try' would return a '{E}' from '{f}', which returns '{type}'; handle it with 'catch' and make a '{E2}' yourself` |
+| NIR3025 | `try` or `catch` of something that is not an `E!T` | `'try' needs a value of an 'E!T' type, but this is '{type}'` |
+| NIR3026 | `try` or a block `catch` not the whole value of a statement | `'try' can only be the whole value of a 'let', an assignment to a variable, a 'return' or a statement` |
+| NIR3027 | `catch` block can end without returning | `the block of a 'catch' must end with a 'return' on every path, because there is no value to carry on with` |
+| NIR3028 | error type made without `error`, or `error` on a struct | `'{E}' is an error type; make one with 'error {E} { ... }'` / `'{S}' is a struct, not an error type; write it without 'error'` |
 | NIR3017 | borrow of a non-struct | `cannot borrow a value of type '{type}': only structs can be borrowed for now` |
 
 ## 5. Parsing (`Nir.Compiler.Parsing`)
@@ -478,6 +486,23 @@ places, method and associated calls) and `.Borrows.cs` (borrow parameter types, 
   once. `BoundMatch` has a `Body` per arm for a statement and a `Value` per arm for a value. `BoundFlow.AlwaysReturns`
   looks through a statement match whose arms all return.
 
+### Slice 9a additions: errors
+
+- Syntax. Keywords `error`, `try`, `catch`. `StructDeclaration.IsError` (`type E = error {..}`), `ResultTypeSyntax` (`E!T`, `E!`),
+  `ErrorLiteralExpression`, `ErrorMessageExpression`, `TryExpression`, `CatchExpression` (fallback, handler expression or handler
+  block). `catch` is the lowest-precedence operator and `try` / `error text` are prefix operators at the level of unary minus. The
+  error-literal alternative is listed first in the `expression` rule so `error E { .. }` is not read as `error` applied to a struct
+  literal. `BANG` ends a statement (`EndsStatement`) so `a: E!` followed by a newline does not swallow the next line.
+- Types. An error type is a `StructTypeSymbol` with `IsError`; `AnyErrorTypeSymbol.Instance` is `anyerror` (one field, `message`);
+  `ResultTypeSymbol` derives from `UnionTypeSymbol` (members `[E, T]` or `[E]`, structural `Equals`, interned by the binder, tag 0 is
+  the error and `SuccessTag` is 1). Because a result is a union, `BindMatch`, `Convert` and the emitter's union code serve it
+  unchanged; `Convert` adds the two widenings (declared error to `anyerror`, and into an `anyerror!T`).
+- `ProgramBinder.Errors.cs`: `ResolveResultType`, `BindErrorLiteral` (shares `BindInitializers` with struct literals),
+  `BindErrorMessage`, `BindTry`, `BindCatch` and `BindStatementValue`, which is how the statement forms that allow `try` (`let`, variable
+  assignment, `return`, expression statement) are told apart from every other place. Error values are immutable
+  (`BindFieldAssignment` refuses any path through one); errors are not borrowable and have no `impl`.
+- Bound nodes: `BoundErrorLiteral`, `BoundErrorMessage`, `BoundErrorToAny`, `BoundUnitSuccess`, `BoundTry`, `BoundCatch`.
+
 ## 8. Emit (`Nir.Compiler.Emit`)
 
 ```csharp
@@ -578,6 +603,20 @@ Emit never reports user errors. If something it cannot emit reaches it, that is 
   that all members are covered); it loads the arm variable from the member field, runs its body or value, and jumps to the end.
   A value match stores each arm's value in a result local so the stack is the same on every path. An arm that always returns gets
   no jump, so a function that ends in such a match has no jump target past its last instruction.
+
+### Slice 9a additions: errors
+
+- `Nir.AnyError` is a generated class with a public `Message` string field; every declared error type is a sealed class
+  deriving from it (public fields, a constructor that calls the base one), so any error is an `anyerror` with no conversion code.
+  Defined once per program, created before the error classes. A field access on an error loads the object reference
+  (`EmitAddress` returns the reference for error types instead of the address of the variable).
+- `BoundErrorLiteral`: `newobj`, store the fields in the order written, then set `Message` from the field called `message` or the type
+  name. A result type is emitted by the union code (`Tag`, `Case0` the error, `Case1` the value; `Nir.Result<n>` names).
+- `BoundTry` stores the operand, tests the tag, and on an error returns (a widened copy when the function's error type differs) with
+  `ret`; on a success it loads `Case1`. `BoundCatch` stores the operand and runs the handler on an error, with the result in a local
+  so the stack is the same on every path. A function returning `E!` that falls off the end succeeds (`EmitUnitSuccess`).
+- A `main` returning `E!` gets a generated entry `Main` returning `int`: it calls the user's `main`, prints `error: <message>` to
+  `Console.Error` for an error and returns 1, otherwise 0. Other entry points are unchanged.
 
 ## 9. Emit findings
 

@@ -25,6 +25,10 @@ internal sealed partial class ProgramBinder
         StructLiteralExpression l => BindStructLiteral(l),
         TupleLiteralExpression t => BindTupleLiteral(t),
         MatchExpression m => BindMatch(m, isStatement: false),
+        ErrorLiteralExpression e => BindErrorLiteral(e),
+        ErrorMessageExpression e => BindErrorMessage(e),
+        TryExpression t => BindTry(t, wholeStatementValue: false),
+        CatchExpression c => BindCatch(c, wholeStatementValue: false),
         FieldAccessExpression f => BindFieldAccess(f),
         InterpolatedStringExpression i => BindInterpolated(i),
         CastExpression c => BindCast(c),
@@ -59,12 +63,18 @@ internal sealed partial class ProgramBinder
                         Error(DiagnosticCodes.UnitInInterpolation, "cannot use a value of type '()' in an interpolated string", hole.Expression.Span);
                         failed = true;
                     }
-                    else if (value.Type is StructTypeSymbol or TupleTypeSymbol or UnionTypeSymbol)
+                    else if (value.Type is StructTypeSymbol or TupleTypeSymbol or UnionTypeSymbol or AnyErrorTypeSymbol)
                     {
                         Error(
                             DiagnosticCodes.StructInInterpolation,
                             $"cannot put a value of type '{value.Type}' in an interpolated string; " +
-                            value.Type switch { TupleTypeSymbol => "use its elements", UnionTypeSymbol => "use 'match' to look inside it", _ => "use its fields" },
+                            value.Type switch
+                            {
+                                TupleTypeSymbol => "use its elements",
+                                UnionTypeSymbol => "use 'match' to look inside it",
+                                AnyErrorTypeSymbol => "use its 'message'",
+                                _ => "use its fields",
+                            },
                             hole.Expression.Span);
                         failed = true;
                     }

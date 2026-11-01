@@ -1,0 +1,9 @@
+fn f() -> anyerror!int {
+    return 1
+}
+fn g() -> anyerror!int {
+    let x = 1 + try f()
+    return x
+}
+fn main() {
+}

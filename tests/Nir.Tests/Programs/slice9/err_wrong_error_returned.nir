@@ -1,0 +1,7 @@
+type A = error { n: int }
+type B = error { n: int }
+fn f() -> A!int {
+    return error B { n = 1 }
+}
+fn main() {
+}

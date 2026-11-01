@@ -1,0 +1,11 @@
+type A = error { n: int }
+type B = error { n: int }
+fn f() -> A!int {
+    return 1
+}
+fn g() -> B!int {
+    let x = try f()
+    return x
+}
+fn main() {
+}

@@ -1,0 +1,27 @@
+type WithMessage = error { message: string, code: int }
+type Bare = error { code: int }
+
+fn a() -> anyerror!int {
+    return error WithMessage { message = "from the field", code = 1 }
+}
+
+fn b() -> anyerror!int {
+    return error Bare { code = 2 }
+}
+
+fn c() -> anyerror!int {
+    return error $"made from text {40 + 2}"
+}
+
+fn say(r: anyerror!int) {
+    r catch e => {
+        print(e.message)
+        return
+    }
+}
+
+fn main() {
+    say(a())
+    say(b())
+    say(c())
+}

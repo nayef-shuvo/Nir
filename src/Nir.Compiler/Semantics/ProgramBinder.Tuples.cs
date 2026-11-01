@@ -69,6 +69,9 @@ internal sealed partial class ProgramBinder
             case TupleTypeSyntax tuple:
                 return ResolveTupleType(tuple);
 
+            case ResultTypeSyntax result:
+                return ResolveResultType(result);
+
             default:
                 throw new System.Diagnostics.UnreachableException();
         }
@@ -123,7 +126,7 @@ internal sealed partial class ProgramBinder
     // `let (a, mut b) = pair`: the right side is evaluated once, then each name takes one element.
     private BoundStatement BindDestructuring(DestructuringDeclaration declaration)
     {
-        var initializer = BindExpression(declaration.Initializer);
+        var initializer = BindStatementValue(declaration.Initializer);
 
         TupleTypeSymbol? tuple = null;
         if (initializer.Type == TypeSymbol.ErrorType)

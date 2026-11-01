@@ -1,0 +1,6 @@
+fn f() -> anyerror!int {
+    return 1
+}
+fn main() {
+    let x = f() catch "no"
+}

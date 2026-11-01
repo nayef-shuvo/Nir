@@ -1,0 +1,5 @@
+type E = error { n: int }
+fn main() {
+    let e = error E { n = 1 }
+    e.n = 2
+}

@@ -25,6 +25,7 @@ src/Nir.Cli/bin/Debug/net10.0/nir run samples/arithmetic.nir
 | `structs.nir` | `type P = struct {..}`, `P impl {..}`, `&self` / `&mut self`, `&` / `&mut` arguments, copies, nested structs |
 | `tuples.nir` | tuples `(1, 2)`, `t.0`, named tuples, `type Pair = (x: int, y: int)`, `let (a, b) = t` |
 | `unions.nir` | `type Shape = union { Circle, Square }`, a member converts to the union, `match` with every case |
+| `errors_handling.nir` | `type E = error {..}`, `E!T`, `error E {..}`, `try`, `catch`, `anyerror`, `fn main() -> anyerror!` |
 | `file_io.nir` | writing, reading and deleting a file through `System.IO` |
 
 ## Programs with a compile error (`errors/`)

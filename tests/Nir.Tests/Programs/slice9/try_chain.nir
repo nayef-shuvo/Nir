@@ -1,0 +1,31 @@
+type ParseError = error { message: string, line: int }
+type RangeError = error { value: int }
+
+fn parse(s: string) -> ParseError!int {
+    if s == "" {
+        return error ParseError { message = "empty input", line = 3 }
+    }
+    return 42
+}
+
+fn check(n: int) -> RangeError!int {
+    if n > 100 {
+        return error RangeError { value = n }
+    }
+    return n
+}
+
+fn load(s: string) -> anyerror!int {
+    let n = try parse(s)
+    let ok = try check(n * 3)
+    return ok + 1
+}
+
+fn main() {
+    print(load("x") catch 0)
+    load("") catch e => {
+        print($"load failed: {e.message}")
+        return
+    }
+    print("unreachable")
+}

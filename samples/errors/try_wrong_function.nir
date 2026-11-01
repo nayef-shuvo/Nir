@@ -1,0 +1,7 @@
+// Expect: NIR3023 "'try' returns the error to the caller, but 'main' returns ..." on line 6.
+fn f() -> anyerror!int {
+    return 1
+}
+fn main() {
+    let x = try f()
+}

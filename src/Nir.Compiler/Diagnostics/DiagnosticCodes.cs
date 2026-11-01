@@ -57,6 +57,12 @@ public static class DiagnosticCodes
     /// <summary>A union member that is itself a union.</summary>
     public const string NestedUnion = "NIR2022";
 
+    /// <summary>The type before the <c>!</c> of <c>E!T</c> is not an error type.</summary>
+    public const string NotAnErrorType = "NIR2023";
+
+    /// <summary>The type after the <c>!</c> of <c>E!T</c> is an error or a result.</summary>
+    public const string InvalidResultValue = "NIR2024";
+
     /// <summary>A name declared twice in the same block.</summary>
     public const string AlreadyDeclared = "NIR2005";
 
@@ -110,6 +116,24 @@ public static class DiagnosticCodes
 
     /// <summary>A block as an arm of a match whose value is used.</summary>
     public const string BlockArmInValueMatch = "NIR3022";
+
+    /// <summary><c>try</c> in a function that does not return an <c>E!T</c>.</summary>
+    public const string TryOutsideResultFunction = "NIR3023";
+
+    /// <summary><c>try</c> of an error that the function's own error type cannot hold.</summary>
+    public const string TryErrorMismatch = "NIR3024";
+
+    /// <summary><c>try</c> or <c>catch</c> applied to a value that is not an <c>E!T</c>.</summary>
+    public const string NotAResult = "NIR3025";
+
+    /// <summary><c>try</c> or a block <c>catch</c> anywhere but as the whole value of a statement.</summary>
+    public const string TryPosition = "NIR3026";
+
+    /// <summary>The block of a <c>catch</c> that can end without returning.</summary>
+    public const string CatchBlockMustReturn = "NIR3027";
+
+    /// <summary>An error type made without <c>error</c>, or <c>error</c> used with a type that is not an error type.</summary>
+    public const string ErrorLiteralForm = "NIR3028";
 
     /// <summary>A struct used inside <c>{ }</c> of an interpolated string.</summary>
     public const string StructInInterpolation = "NIR3016";

@@ -92,13 +92,17 @@ internal sealed partial class ProgramBinder
 
     private BoundReturnStatement BindReturn(ReturnStatement statement)
     {
-        var value = statement.Value is { } expression ? BindExpression(expression) : null;
+        var value = statement.Value is { } expression ? BindStatementValue(expression) : null;
         var function = _currentFunction!; // statements are only bound inside BindFunction
         var expected = function.ReturnType;
 
         if (expected == TypeSymbol.ErrorType || value?.Type == TypeSymbol.ErrorType)
         {
             // The signature or the value already had an error.
+        }
+        else if (value is null && expected is ResultTypeSymbol { Success: null } unitResult)
+        {
+            value = new BoundUnitSuccess(unitResult); // a bare `return` in an `E!` function succeeds
         }
         else if (expected == TypeSymbol.UnitType)
         {
@@ -129,7 +133,7 @@ internal sealed partial class ProgramBinder
     private BoundVariableDeclaration BindVariableDeclaration(VariableDeclaration declaration)
     {
         // Bind the initializer first, so `let x = x` does not see the variable being declared.
-        var initializer = BindExpression(declaration.Initializer);
+        var initializer = BindStatementValue(declaration.Initializer);
 
         var type = initializer.Type;
         if (declaration.DeclaredType is { } annotation)
@@ -158,7 +162,8 @@ internal sealed partial class ProgramBinder
 
     private BoundStatement BindAssignment(AssignmentStatement assignment)
     {
-        var value = BindExpression(assignment.Value);
+        // `x = try f()` is fine, but `p.x = try f()` is not: the address of `p` would be on the stack when `try` returns.
+        var value = assignment.Target is NameExpression ? BindStatementValue(assignment.Value) : BindExpression(assignment.Value);
 
         if (assignment.Target is FieldAccessExpression)
         {
@@ -224,6 +229,7 @@ internal sealed partial class ProgramBinder
         "double" => TypeSymbol.DoubleType,
         "bool" => TypeSymbol.BoolType,
         "string" => TypeSymbol.StringType,
+        "anyerror" => AnyErrorTypeSymbol.Instance,
         _ => null,
     };
 }

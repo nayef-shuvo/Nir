@@ -17,11 +17,22 @@ internal sealed class EmitContext
 
     public Dictionary<UnionTypeSymbol, UnionLayout> Unions { get; } = [];
 
+    /// <summary>The class every error derives from (<c>anyerror</c>), defined once per program.</summary>
+    public TypeBuilder AnyError { get; set; } = null!;
+
+    public FieldBuilder AnyErrorMessage { get; set; } = null!;
+
+    public ConstructorBuilder AnyErrorConstructor { get; set; } = null!;
+
+    /// <summary>The constructor of each declared error class.</summary>
+    public Dictionary<StructTypeSymbol, ConstructorBuilder> ErrorConstructors { get; } = [];
+
     /// <summary>The CLR type for a Nir type. A struct's is the type the emitter defined for it, not something the symbol knows.</summary>
     public Type ClrOf(TypeSymbol type) => type switch
     {
         StructTypeSymbol structType => Structs[structType],
         UnionTypeSymbol union => Unions[union].Type,
+        AnyErrorTypeSymbol => AnyError,
         BorrowTypeSymbol borrow => Structs[borrow.Element].MakeByRefType(), // a borrow is a CLR `ref`
         TupleTypeSymbol tuple => ValueTupleOf(tuple),
         _ => type.ClrType,
@@ -72,6 +83,11 @@ internal sealed class EmitContext
     /// </summary>
     public IReadOnlyList<FieldInfo> FieldPath(FieldSymbol field)
     {
+        if (field.Owner is AnyErrorTypeSymbol)
+        {
+            return [AnyErrorMessage];
+        }
+
         if (field.Owner is not TupleTypeSymbol tuple)
         {
             return [Fields[field]];
@@ -116,7 +132,7 @@ internal sealed class EmitContext
 
     private static bool ContainsStruct(TypeSymbol type) => type switch
     {
-        StructTypeSymbol or UnionTypeSymbol => true,
+        StructTypeSymbol or UnionTypeSymbol or AnyErrorTypeSymbol => true,
         TupleTypeSymbol tuple => tuple.Elements.Any(element => ContainsStruct(element.Type)),
         _ => false,
     };

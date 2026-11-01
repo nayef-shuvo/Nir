@@ -1,0 +1,20 @@
+type NotFound = error { message: string, key: string }
+
+fn lookup(key: string) -> NotFound!int {
+    if key == "a" {
+        return 1
+    }
+    return error NotFound { message = "no such key", key = key }
+}
+
+fn show(key: string) {
+    match lookup(key) {
+        n: int => print($"{key} = {n}")
+        e: NotFound => print($"{e.message}: {e.key}")
+    }
+}
+
+fn main() {
+    show("a")
+    show("zzz")
+}

@@ -7,7 +7,7 @@ namespace Nir.Compiler.Semantics;
 /// A union declared with <c>type Shape = union { Circle, Square }</c>: a value that is exactly one of its members. It is a type
 /// of its own (two unions with the same members are different types). It compiles to a tagged value type.
 /// </summary>
-public sealed class UnionTypeSymbol : TypeSymbol
+public class UnionTypeSymbol : TypeSymbol
 {
     internal UnionTypeSymbol(UnionDeclaration declaration)
         : base(declaration.Name.Text)
@@ -15,7 +15,17 @@ public sealed class UnionTypeSymbol : TypeSymbol
         Declaration = declaration;
     }
 
-    public UnionDeclaration Declaration { get; }
+    /// <summary>For the result types, which are unions the compiler makes itself (see <see cref="ResultTypeSymbol"/>).</summary>
+    private protected UnionTypeSymbol(string name)
+        : base(name)
+    {
+    }
+
+    /// <summary>Where the union was declared; null for a result type.</summary>
+    public UnionDeclaration? Declaration { get; }
+
+    /// <summary>The name of the CLR type Emit defines for it.</summary>
+    public virtual string ClrName => Name;
 
     /// <summary>The member types in declaration order; a member's position is its tag.</summary>
     public ImmutableArray<TypeSymbol> Members { get; internal set; } = [];

@@ -496,7 +496,7 @@ let same = Enumerable::Sum(nums)         // the full path always works, no impor
 calling `IO.File.ReadAllText` internally. In v1, `std` is only a small prelude [proposed] (`print` and a few basics).
 Everything else comes from `clr::cs`.
 
-## 10. Error handling [locked basics, syntax proposed]
+## 10. Error handling [slice 9a done, C# interop (9b) planned]
 
 Errors are values, not exceptions. `E!T` means "either an error of type `E`, or a `T`".
 The error type must always be written. `anyerror` is the catch-all.
@@ -575,6 +575,25 @@ let text = try IO::File::ReadAllText(path)   // try: the exception becomes an an
 `anyerror` has `message` and `exception` (the original .NET exception, or null for errors made in Nir) [proposed names].
 
 Unrecoverable failures (index out of range, null dereference) are not errors. They crash, like a panic.
+
+### As built in slice 9a (decisions D-072 to D-079)
+
+- `type E = error { fields }` is a class (a reference type) and its values cannot change; the only way to make one is `error E { f = v }`
+  (plain `E { .. }` is an error). `error "text"` makes an `anyerror`. Errors cannot be compared, borrowed or given `impl` yet.
+- `E!T` is a union of `E` and `T` (members in that order, structural: two `E!T` are the same type), so the conversions of unions
+  apply (`T` or `E` converts to it) and `match r { v: T => .., e: E => .. }` works. `E` is an error type or `anyerror`; `T` is neither an error
+  nor a result. A declared error also converts to `anyerror`, and so to `anyerror!T`.
+- `E!` means success carries nothing. A bare `return`, or reaching the end of the body, succeeds. `fn main() -> E!` is allowed: an error
+  that escapes `main` is printed to stderr as `error: <message>` and the exit code is 1.
+- `anyerror.message` is the declared `message: string` field of the error if it has one, otherwise the name of the error type. A declared
+  error type has no `message` unless it declares one.
+- `try expr` yields the value or returns the error from the enclosing function, which must return `E2!U` with `E2` the same error type or
+  `anyerror`. For now `try` (and `catch` with a block) must be the whole value of a `let`, an assignment to a variable, a `return` or a
+  statement.
+- `a catch value` gives a fallback; `a catch e => expr` computes one from the error; `a catch e => { ... }` must return on every path when
+  there is a value to produce (for `E!` it need not). `catch` has the lowest precedence.
+- The C# side, `try` on .NET calls, `e.exception`, `impl` on errors and `==` on errors are not done yet.
+
 
 ## 11. The kinds of types [union and match done, rest planned]
 

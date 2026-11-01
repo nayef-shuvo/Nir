@@ -994,8 +994,56 @@ Tasks:
 - [x] **T8b.3 Tests and docs.** Parser, binder and end-to-end tests; `Programs/slice8/`; `samples/unions.nir` and error samples;
   `architecture.md`, `CLAUDE.md`, memory.
 
-**Slice 9: errors.** `type E = error {...}`, `E!T`, `anyerror`, `error` keyword, `try`, `catch`, `fn main() -> anyerror!`,
-C# exceptions wrapped as `anyerror` under `try`. Design section 10.
+**Slice 9a: errors in Nir** (done). Decisions D-072 to D-079; design.md section 10.
+
+```
+type ParseError = error { message: string, line: int }
+
+fn parse_port(s: string) -> ParseError!int {
+    if s == "" { return error ParseError { message = "empty", line = 1 } }
+    return 8080
+}
+
+fn load(s: string) -> anyerror!int {
+    let port = try parse_port(s)            // returns the error to the caller (widened to anyerror)
+    return port + 1
+}
+
+fn main() -> anyerror! {
+    let a = parse_port("") catch 80                       // fallback value
+    let b = load("x") catch e => {                         // handle it; the block must return
+        print($"failed: {e.message}")
+        return
+    }
+    match parse_port("1") { n: int => print(n), e: ParseError => print(e.line) }
+}
+```
+
+Tasks:
+
+- [x] **T9a.0 Syntax.** Keywords `error`, `try`, `catch`. `type E = error { fields }` (a `StructDeclaration` with `IsError`); result type
+  `E!T` and `E!` in `typeSyntax` (`ResultTypeSyntax`); `error E { field = v }` and `error message` expressions; `try expr` (prefix, unary
+  precedence); `a catch b` and `a catch name => expr-or-block` (lowest precedence). Parser tests; `AstFormatter`.
+- [x] **T9a.1 Types.** Error types are `StructTypeSymbol`s with `IsError` (classes, immutable, no `impl`, no borrows, may not contain themselves
+  by value); `AnyErrorTypeSymbol` (`anyerror`, with `message`); `ResultTypeSymbol : UnionTypeSymbol` (members `[E, T]`, structural equality,
+  interned, `E!` has no success member). `UnionTypeSymbol` loses `sealed` and gets a `ClrName`. Conversions: `E` -> `anyerror`, `E`/`T` ->
+  `E!T`, a declared error -> `anyerror!T`. Checks: `E` must be an error type, `T` must not be an error or a result. Binder tests.
+- [x] **T9a.2 Expressions.** `error E {..}` literal (all fields once; plain `E {..}` on an error type is an error), `error "text"`; field
+  reads on errors and `anyerror.message`; `try` (statement-level positions only; function must return a compatible `E2!U`),
+  `catch` (fallback and handler forms; block handlers only at statement level and must return unless the success is `()`); `match` on `E!T`
+  (arms `v: T`, `e: E`); `return` bare and falling off the end succeed in `E!` functions; `main` may be `-> E!`. Binder tests.
+- [x] **T9a.3 Emit.** Error types are classes deriving from a generated `Nir.AnyError` (field `Message`, set from the declared `message` field or
+  the type name); result types reuse the union layout (`Tag`, `Case0` error, `Case1` value; error is tag 0); `try`/`catch` branches on the tag
+  (`try` returns a rebuilt result when the type widens); an `E!` entry point gets a generated `Main` that prints `error: <message>` to stderr
+  and exits with 1. End-to-end tests.
+- [x] **T9a.4 Tests and docs.** Golden programs in `Programs/slice9/`, `samples/errors_handling.nir` and error samples, design.md section 10,
+  architecture.md, CLAUDE.md, memory.
+
+Left for 9b and later: `try` on .NET calls (exceptions become `anyerror`, `e.exception`), `impl` on error types, `try` anywhere inside an
+expression (needs stack spilling), `==` on errors, converting `E!T` to `anyerror!T` without `try`.
+
+**Slice 9b: C# interop for errors.** `try` / `catch` on calls into .NET: a thrown exception becomes an `anyerror` that wraps it (`e.message`,
+`e.exception`); a call without `try` that throws still crashes. Tasks are written when this slice starts.
 
 **Slice 10: heap references.** `&T`, `&mut T`, `&T {...}`, `&` of a variable (hoisted to a `Ref<T>`), `?T`, null. Design
 sections 3, 4, 6, 7.

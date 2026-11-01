@@ -1,0 +1,9 @@
+// Expect: NIR3027 "the block of a 'catch' must end with a 'return' ..." on line 6.
+fn f() -> anyerror!int {
+    return 1
+}
+fn main() {
+    let x = f() catch e => {
+        print(e.message)
+    }
+}

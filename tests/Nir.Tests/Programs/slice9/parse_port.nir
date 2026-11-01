@@ -1,0 +1,19 @@
+type ParseError = error { message: string, line: int }
+
+fn parse_port(s: string) -> ParseError!int {
+    if s == "" {
+        return error ParseError { message = "empty", line = 1 }
+    }
+    if s == "http" {
+        return 80
+    }
+    return 8080
+}
+
+fn main() {
+    print(parse_port("http") catch 0)
+    print(parse_port("other") catch 0)
+    print(parse_port("") catch 1)
+    let n = parse_port("") catch e => e.line + 100
+    print(n)
+}
