@@ -62,6 +62,10 @@ error: aborting due to 1 previous error
 
 Exit codes: `0` success, `1` compile errors, `2` bad usage, `3` internal compiler error.
 
+## Editor support
+
+Syntax highlighting for VS Code is in `editors/vscode-nir/` (see its README for how to try and install it).
+
 ## Run the tests
 
 ```bash

@@ -1,0 +1,235 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Nir",
+  "scopeName": "source.nir",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#interpolated-string" },
+    { "include": "#string" },
+    { "include": "#declarations" },
+    { "include": "#keywords" },
+    { "include": "#constants" },
+    { "include": "#numbers" },
+    { "include": "#types" },
+    { "include": "#calls" },
+    { "include": "#members" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.double-slash.nir",
+      "match": "//.*$"
+    },
+
+    "string": {
+      "name": "string.quoted.double.nir",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.nir" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.nir" } },
+      "patterns": [{ "include": "#escape" }]
+    },
+
+    "interpolated-string": {
+      "name": "string.quoted.double.interpolated.nir",
+      "begin": "\\$\"",
+      "end": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.nir" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.nir" } },
+      "patterns": [
+        { "include": "#escape" },
+        {
+          "name": "constant.character.escape.brace.nir",
+          "match": "\\{\\{|\\}\\}"
+        },
+        { "include": "#hole" }
+      ]
+    },
+
+    "hole": {
+      "name": "meta.interpolation.nir",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.nir" } },
+      "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.nir" } },
+      "contentName": "source.nir",
+      "patterns": [
+        { "include": "#braces" },
+        { "include": "$self" }
+      ]
+    },
+
+    "braces": {
+      "begin": "\\{",
+      "end": "\\}",
+      "patterns": [
+        { "include": "#braces" },
+        { "include": "$self" }
+      ]
+    },
+
+    "escape": {
+      "patterns": [
+        {
+          "name": "constant.character.escape.nir",
+          "match": "\\\\[ntr\\\\\"{]"
+        },
+        {
+          "name": "invalid.illegal.unknown-escape.nir",
+          "match": "\\\\."
+        }
+      ]
+    },
+
+    "declarations": {
+      "patterns": [
+        {
+          "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.function.nir" },
+            "2": { "name": "entity.name.function.nir" }
+          }
+        },
+        {
+          "match": "\\b(type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.nir" },
+            "2": { "name": "entity.name.type.nir" }
+          }
+        },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s+(impl)\\b",
+          "captures": {
+            "1": { "name": "entity.name.type.nir" },
+            "2": { "name": "storage.type.nir" }
+          }
+        }
+      ]
+    },
+
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.nir",
+          "match": "\\b(if|else|while|for|in|break|continue|return|match)\\b"
+        },
+        {
+          "name": "keyword.control.import.nir",
+          "match": "\\b(using)\\b"
+        },
+        {
+          "name": "storage.type.nir",
+          "match": "\\b(let|struct|union|impl|fn|type)\\b"
+        },
+        {
+          "name": "storage.modifier.nir",
+          "match": "\\b(mut)\\b"
+        },
+        {
+          "name": "keyword.operator.word.nir",
+          "match": "\\b(as)\\b"
+        },
+        {
+          "name": "variable.language.self.nir",
+          "match": "\\bself\\b"
+        }
+      ]
+    },
+
+    "constants": {
+      "name": "constant.language.boolean.nir",
+      "match": "\\b(true|false)\\b"
+    },
+
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.nir",
+          "match": "\\b[0-9]+\\.[0-9]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.nir",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.nir",
+          "match": "\\b(int|double|bool|string)\\b"
+        },
+        {
+          "name": "entity.name.type.nir",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b(?!\\s*\\()"
+        }
+      ]
+    },
+
+    "calls": {
+      "patterns": [
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": { "1": { "name": "entity.name.function.call.nir" } }
+        }
+      ]
+    },
+
+    "members": {
+      "patterns": [
+        {
+          "match": "(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "punctuation.accessor.nir" },
+            "2": { "name": "entity.name.function.method.nir" }
+          }
+        },
+        {
+          "match": "(\\.)([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "punctuation.accessor.nir" },
+            "2": { "name": "variable.other.property.nir" }
+          }
+        }
+      ]
+    },
+
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arrow.nir",
+          "match": "=>|->"
+        },
+        {
+          "name": "keyword.operator.path.nir",
+          "match": "::"
+        },
+        {
+          "name": "keyword.operator.range.nir",
+          "match": "\\.\\.=?"
+        },
+        {
+          "name": "keyword.operator.logical.nir",
+          "match": "&&|\\|\\||!(?!=)"
+        },
+        {
+          "name": "keyword.operator.comparison.nir",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.borrow.nir",
+          "match": "&"
+        },
+        {
+          "name": "keyword.operator.assignment.nir",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.arithmetic.nir",
+          "match": "[-+*/%]"
+        }
+      ]
+    }
+  }
+}

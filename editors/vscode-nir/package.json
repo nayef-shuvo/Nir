@@ -1,0 +1,36 @@
+{
+  "name": "nir",
+  "displayName": "Nir",
+  "description": "Syntax highlighting for the Nir programming language",
+  "version": "0.1.0",
+  "publisher": "nir",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "nir",
+        "aliases": [
+          "Nir",
+          "nir"
+        ],
+        "extensions": [
+          ".nir"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nir",
+        "scopeName": "source.nir",
+        "path": "./syntaxes/nir.tmLanguage.json"
+      }
+    ]
+  }
+}
