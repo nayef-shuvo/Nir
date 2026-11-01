@@ -1,32 +1,37 @@
 # Nir logo
 
-**The mark** is a lowercase *n* built from two halves that meet at the top: a thin one (salmon) and a thick one (cream), on a plum
-tile. The two halves are the language and the platform it stands on (.NET) joining in the middle; they are not equal, and they fit.
-Flat shapes only, no gradients, so it stays clear down to 16 px.
+**The mark** is a capital **N** made of stepping stones: separate flat circles of different sizes, placed along the three strokes of an N and
+growing as they go, with one stone in a different colour. The idea is a project built one small step at a time. Flat solid colours only, no gradients.
 
-**The second mark** (`nir-mark-stones.svg`) is a capital *N* made of seven stepping stones that grow as they go and end in one big
-mauve stone: the project was built one small step at a time. It is for larger places (banners, a website); at 16 px the stones turn
-into dots.
+The primary colour is golden yellow `#FFC72B` (255, 199, 43). The mark in use now is **07** (`nir-mark-stones-rising.svg`: the README, the extension icon). All three candidates are kept, in case that changes.
 
-| File | Use |
+| File | Candidate |
 |---|---|
-| `nir-mark.svg` | The main mark (source). The editor and file icon; works from 16 px up. |
-| `nir-mark-stones.svg` | The stepping-stones mark (source), on a round salmon tile. |
-| `nir-logo.svg`, `nir-logo-dark.svg` | The main mark with the word "nir": dark letters for light pages, light letters for dark pages. The word is drawn as paths, so it needs no font. |
-| `nir-mark-512.png`, `nir-mark-stones-512.png`, `nir-logo-1280.png` | Renders. |
+| `nir-mark-stones.svg` | **05**: ink stones on a round yellow tile, the top-right stone navy |
+| `nir-mark-stones-navy.svg` | **06**: cream and yellow stones on a navy rounded square |
+| `nir-mark-stones-rising.svg` | **07**: like 05 but the diagonal rises from bottom left to top right |
+| `nir-mark-*-512.png` | renders of each |
+
+The stones need about 32 px to read; at 16 px (a file icon) they blur into a dotted block. That is the thing to judge when choosing.
+
+## Trying a candidate as the `.nir` file icon in your editor
+
+```bash
+python3 editors/vscode-nir/tools/add-file-icon.py --list
+python3 editors/vscode-nir/tools/add-file-icon.py --icon stones --auto     # or: navy, rising
+```
+
+Then, in the editor: "Preferences: File Icon Theme", pick another theme and then your own again (a plain "Reload Window" keeps VS Code's stored copy of the theme). See `editors/vscode-nir/README.md`.
 
 ## Palette
 
-The language colour is salmon. The colours come from a five-stripe palette picked by the author, plus a plum and a rose.
-
 | Name | Hex | Where |
 |---|---|---|
-| **Salmon** (the language colour) | `#F5A07E` | the thin half, the stones tile, the dot of the `i` |
-| Plum | `#55384A` | the tile of the main mark, the letters of the word |
-| Cream | `#FFF4EA` | the thick half, the stones |
-| Mauve | `#AC6E81` | the big stone |
-| Rose | `#D78A9C` | spare accent |
-| Mint, teal, mustard | `#A8D3AB`, `#84C5CB`, `#E2AA35` | spare accents from the same palette |
+| **Golden yellow** (primary, the language colour) | `#FFC72B` | the tile of 05 and 07, the yellow stones of 06 |
+| Ink | `#2A2623` | the stones of 05 and 07 |
+| Navy | `#1B2A49` | the tile of 06, the accent stone of 05 and 07 |
+| Cream | `#FFF8E6` | the stones of 06 |
 
-To render the PNGs again, use any SVG renderer, for example `npm i @resvg/resvg-js` and
+`ai-prompts.md` has the brief, prompts and SVG sources for making more variations with other AIs.
+To render a PNG: any SVG renderer, for example `npm i @resvg/resvg-js` and
 `new Resvg(svg, { fitTo: { mode: 'width', value: 512 } }).render().asPng()`.

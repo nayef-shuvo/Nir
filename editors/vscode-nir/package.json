@@ -2,7 +2,7 @@
   "name": "nir",
   "displayName": "Nir",
   "description": "Syntax highlighting for the Nir programming language",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "nir",
   "license": "UNLICENSED",
   "icon": "images/icon.png",

@@ -1,9 +1,6 @@
 # Nir
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/logo/nir-logo-dark.svg">
-  <img src="assets/logo/nir-logo.svg" alt="Nir" height="96">
-</picture>
+<img src="assets/logo/nir-mark-stones-rising-512.png" alt="Nir" height="96">
 
 A modern, minimal language for the .NET CLR. It compiles to IL and talks to C# code directly, the way Kotlin does with Java.
 

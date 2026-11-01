@@ -30,11 +30,18 @@ public class VsCodeExtensionTests
     }
 
     [Fact]
-    public void The_file_icon_is_the_main_logo_mark()
+    public void The_file_icon_is_the_rising_stones_mark()
     {
-        var logo = File.ReadAllText(Path.Combine(RepositoryRoot.Find(), "assets", "logo", "nir-mark.svg"));
+        var logo = File.ReadAllText(Path.Combine(RepositoryRoot.Find(), "assets", "logo", "nir-mark-stones-rising.svg"));
         var icon = File.ReadAllText(Path.Combine(_extension, "images", "file-icon.svg"));
 
         Assert.Equal(logo, icon);
     }
+
+    [Theory]
+    [InlineData("nir-mark-stones.svg")]
+    [InlineData("nir-mark-stones-navy.svg")]
+    [InlineData("nir-mark-stones-rising.svg")]
+    public void Every_logo_candidate_the_icon_script_offers_exists(string file) =>
+        Assert.True(File.Exists(Path.Combine(RepositoryRoot.Find(), "assets", "logo", file)));
 }
