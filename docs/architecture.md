@@ -164,6 +164,8 @@ Codes defined so far (slices 1 to 7; the message text in `DiagnosticCodes` call 
 | NIR3002 | assignment to a non-`mut` variable | `cannot assign to '{name}' because it is not mutable` |
 | NIR3003 | operator not defined for these types | `operator '{op}' cannot be applied to '{left}' and '{right}'` (unary: `... to '{type}'`) |
 | NIR3004 | literal out of range | `'{text}' is out of range for '{type}'` |
+| NIR3029 | literal suffix its literal cannot have | `'{digits}' has a fraction, so it cannot be a '{type}'` |
+| NIR3030 | character literal that is not one character | `a character literal cannot be empty` / `a character literal must hold exactly one character (one UTF-16 code unit)` |
 | NIR3005 | variable would have type `()` | `cannot declare '{name}' with type '()'` |
 | NIR3006 | no overload accepts the argument types | `no overload of '{name}' accepts ({types})` |
 | NIR3007 | function does not end with a return | `'{name}' does not return a value on every path` |
@@ -379,10 +381,11 @@ local name is the last segment; a second import of the same name is `NIR2010` an
 namespaces down to a type. The last part is a public static method of that type. A missing part, a namespace where a type
 is needed, or a method that is not a public static member is `NIR2011` at that part. Nested types are not supported.
 
-**Calling .NET methods** (static and instance). Only methods whose parameters are all `int`, `double`, `bool` or `string`
+**Calling .NET methods** (static and instance). Only methods whose parameters are all primitive types (the numbers, `char`, `bool`, `string`)
 count as overloads (generic methods, `ref`/`out`, arrays and every other type are skipped). The overload is chosen by exact
-argument types; no overload with that argument count is `NIR2004`, the right count but no exact match is `NIR3006`. A chosen
-method whose return type is not `void`, `int`, `double`, `bool` or `string` is `NIR3011`. `receiver.Method(args)` uses the CLR
+argument types (when none matches, the overloads that match once the number literals without a suffix take their parameter's type are
+tried, and exactly one must remain: `Math::Max(count, 1)` with a `long` count calls `Max(long, long)`); no overload with that argument count is `NIR2004`, the right count but no exact match is `NIR3006`. A chosen
+method whose return type is not `void` or a primitive type is `NIR3011`. `receiver.Method(args)` uses the CLR
 type the receiver's Nir type stands for (`string` is `System.String`, and so on) and the public instance methods of it.
 `print` goes through the same routine, so it follows the same rules.
 
@@ -395,29 +398,32 @@ the function body share the first scope; every nested block (`if`, `else`, `whil
 variable gets its own, which ends with it. A variable is visible only after its declaration; the initializer is bound before
 the variable is declared, so `let x = x` does not see the new `x`. A name may not be declared if any scope of the function
 already has it: `NIR2005`, worded "in this block" or "in an enclosing block", and the first declaration is kept. Blocks side by
-side can reuse names. Types are looked up by name in `LookupType` (`int`, `double`, `bool`, `string`).
+side can reuse names. Types are looked up by name in `LookupType` (the primitive names are in `LookupPrimitive`).
 
 **Strings and conversions.** `+` on two strings is a string; `==` / `!=` on two strings are `bool`; every other operator on
 strings is `NIR3003`. An interpolated string becomes `BoundInterpolatedString(Parts)` in which every part is a string: a
 hole that is not a string is wrapped in a `BoundMemberCallExpression` of its type's zero-argument `ToString()` (found with
 the same `ClrMethods` lookup as other instance calls), a hole of type `()` is `NIR3012`, and a hole that already failed makes
-the whole string an error with no second diagnostic. `x as T` needs `T` to be `int` or `double` (`NIR2006` for an unknown
-name) and `x` to be `int` or `double` (otherwise `NIR3001` at the cast); converting to the same type returns `x` unchanged,
-otherwise the result is `BoundConversion(Operand, Target)`.
+the whole string an error with no second diagnostic. `x as T` needs `T` to be a known type (`NIR2006`), and the pair to be number to number or
+`char` to or from an integer type (`CanConvert`; anything else is `NIR3001` at the cast); converting to the same type returns `x` unchanged,
+otherwise the result is `BoundConversion(Operand, Target)`. Every conversion is checked (see "Slice 9c" below).
 
 **Control flow.** `BindCondition` requires `bool` (`NIR3001` otherwise, and nothing more when the condition already failed).
-`for` bounds are bound before the loop variable exists and must be `int`; the variable is an immutable `int` in its own
-scope, and the body is a nested block inside that scope, so the body cannot redeclare it. `_loopDepth` counts the loops
+`for` bounds are bound before the loop variable exists and must have the same type, an integer type or `char` (`NIR3001`; a
+literal bound takes the other bound's type); the variable is an immutable variable of that type in its own scope, and the body is a nested block inside that scope, so the body cannot redeclare it. `_loopDepth` counts the loops
 being bound; `break` / `continue` at depth 0 is `NIR3010`, and the depth resets for each function. `else if` is bound as an
 else block holding one `if`. `!`, `&&` and `||` accept `bool` only (`NIR3003`). `BoundFlow.AlwaysReturns(block)` decides
 "every path returns": the last statement is a return, or an `if` with an `else` whose two blocks both always return.
 
-**Operator typing.** Both operands must have the same type (no implicit conversions). `+ - * / %` need `int` or `double`
-and give that type; `< <= > >=` need `int` or `double` and give `bool`; `== !=` need `int`, `double` or `bool` and give
-`bool`; unary `-` needs `int` or `double`. Anything else is `NIR3003`, reported at the start of the expression.
+**Operator typing.** Both operands must have the same type (no implicit conversions; a number literal without a suffix first
+takes the type of the other operand, `MatchLiteral`). `+ - * / %` need a number type (`NumberTypes.IsNumber`: the integers,
+`float`, `double`, `decimal`) and give that type; `< <= > >=` need a number type or `char` and give `bool`; `== !=` need a number
+type, `char`, `string` or `bool` and give `bool`; unary `-` needs a signed integer, `float`, `double` or `decimal`. Anything else
+is `NIR3003`, reported at the start of the expression.
 
-**Overloads.** `BuiltinFunctions` holds a list of overloads per name (`print` has `int`, `double`, `bool`, `string`,
-each bound to the matching `Console.WriteLine`). A user function with the same name wins. For a built-in: no overload with
+**Overloads.** `BuiltinFunctions` holds a list of overloads per name (`print` has one for each number type, `char`, `bool` and `string`,
+each bound to the matching `Console.WriteLine`; `byte`, `sbyte`, `short` and `ushort` have none in .NET, so they use the `int` one,
+which prints the same text). A user function with the same name wins. For a built-in: no overload with
 the argument count gives `NIR2004`; the right count but no exact type match gives `NIR3006` at the call start.
 
 Entry point:
@@ -538,8 +544,8 @@ Slice 2 additions to emit (`BodyEmitter`, a private class holding the per-functi
 - Functions: methods are defined with the declared parameter and return CLR types. A parameter is read with `ldarg`
   (parameters are never assigned). `return value` emits the value then `ret`. The trailing `ret` is emitted only for
   `()` functions; any other function ends with its own `return`.
-- Integer `+ - *` use `add.ovf` / `sub.ovf` / `mul.ovf` (overflow throws, design.md "Numbers"); integer negation is `0 - x`
-  with `sub.ovf`; `div` and `rem` throw on division by zero. `double` arithmetic uses plain `add sub mul div rem neg`.
+- Integer `+ - *` use `add.ovf` / `sub.ovf` / `mul.ovf` (overflow throws, design.md "Numbers"; widths other than `int`: see Slice 9c
+  below); integer negation is `0 - x` with `sub.ovf`; `div` and `rem` throw on division by zero. `double` arithmetic uses plain `add sub mul div rem neg`.
 - Comparisons use `clt cgt ceq`. `<=` and `>=` are "not greater" / "not less", using `cgt.un` / `clt.un` for `double` so a
   NaN operand makes them false. `!=` is `ceq` then not.
 - The generated runtimeconfig also sets `configProperties: {"System.Globalization.Invariant": true}` so numbers print
@@ -550,7 +556,33 @@ that followed by a not (`StringMethods` holds these `MethodInfo`s, taken from th
 `ldstr ""` when it has no parts; for one part, the part then `ldstr ""` then `Concat(string, string)` so a null becomes
 empty; for 2, 3 or 4 parts the matching `Concat` overload; above 4, a `string[]` filled with `newarr` / `stelem.ref` and
 `Concat(string[])`. `int` to `double` is `conv.r8` and `double` to `int` is `conv.ovf.i4` (truncates toward zero, throws
-`OverflowException` for a value that does not fit and for NaN).
+`OverflowException` for a value that does not fit and for NaN); slice 9c generalised this to every number type.
+
+### Slice 9c: number types, literals, characters (D-083 to D-090)
+
+**Types.** `TypeSymbol` has one static per primitive (`ByteType` ... `CharType`), `FromClr` maps the CLR types back, and `NumberTypes`
+(Semantics) is the one place that says which types are integers, signed, narrow, countable (for ranges) or ordered. The emitter asks
+it too, so no phase lists types itself.
+
+**Literals.** The lexer takes `DIGIT+` or `DIGIT+ . DIGIT+` followed by an optional `_typename` (`NUMBER_SUFFIX`) and `CHAR_LITERAL`
+(anything up to the closing quote; the binder checks it is one character). `BindNumberLiteral` makes a `BoundNumberLiteral(Value, Text,
+Type, CanAdapt, Span)`. A literal with a suffix has its type for good. One without is `int` / `double` with `CanAdapt` set, and
+keeps its `Text` so it can be read again: `Convert` (the single place a value becomes the expected type) calls `Adapt` first, which
+parses the text as the expected type (`NumberTypes.Parse`) and reports `NIR3004` if it does not fit. The other places that adapt are
+`MatchLiteral` (binary operators and range bounds), `ChooseClrMethod` (.NET overloads), tuple literals converted to a tuple type, and
+a union that has exactly one member the literal fits. A minus in front of a literal is folded into it (`BindUnary`), so `-128`
+fits an `sbyte`. A whole number too big for `int` is held in `_pendingLiterals` until the statement is bound, because an enclosing
+context may still make it a `long`; what nothing adopted is reported by `BindStatement` as `NIR3004`.
+
+**Emit.** `BodyEmitter.Numbers.cs`: a literal is `ldc.i4` / `ldc.i8` / `ldc.r4` / `ldc.r8` (a `decimal` is built with its five-part
+constructor). Integer `+ - *` are `add.ovf` / `sub.ovf` / `mul.ovf`, the `.un` form for `uint` and `ulong`, and `div.un`, `rem.un`,
+`clt.un`, `cgt.un` there too. The 8 and 16-bit types are computed in 32 bits and narrowed with `conv.ovf.*` after `+ - * /`, so
+`250_byte + 10_byte` throws. `float` and `double` use the plain instructions; `decimal` calls its operators (`NumberMethods`).
+`as` is `NumberConversions.Emit`: `conv.ovf.<target>` (the `.un` form when an integer source is unsigned), `conv.r4` / `conv.r8`
+(after `conv.r.un` from an unsigned source) for floating targets, and `Decimal`'s own conversion operators to and from `decimal`.
+`catch` / `try` on an `as` use the same generated `Protected<n>` helper as .NET calls (`DefineProtectedHelper`), keyed by the pair
+of types. `a..=b` runs the body, then stops when the counter equals `b` instead of adding one more, so it works for the largest
+value of the type.
 
 Slice 5 emit additions (`BodyEmitter`): a stack of `(Break, Continue)` labels for the loops being emitted.
 - `if`: `brfalse` to the else label. The `br` over the else part and the end label are emitted only when the then-block can fall

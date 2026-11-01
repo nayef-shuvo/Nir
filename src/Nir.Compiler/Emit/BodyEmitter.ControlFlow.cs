@@ -54,11 +54,15 @@ internal sealed partial class BodyEmitter
     }
 
     // The loop variable is immutable, so it can serve as the counter itself. The end is evaluated once, into a hidden local.
+    // `a..b` stops before the end, so the counter never goes past it. `a..=b` runs the body first and stops when the counter is
+    // the end, rather than adding one more, so it also works when the end is the largest value of the type.
     private void EmitFor(BoundForStatement statement)
     {
-        var variable = il.DeclareLocal(TypeSymbol.IntType.ClrType);
-        var limit = il.DeclareLocal(TypeSymbol.IntType.ClrType);
+        var type = statement.Variable.Type;
+        var variable = il.DeclareLocal(type.ClrType);
+        var limit = il.DeclareLocal(type.ClrType);
         _locals[statement.Variable] = variable;
+        var unsigned = NumberTypes.IsUnsignedOnStack(type);
 
         EmitExpression(statement.Start);
         il.Emit(OpCodes.Stloc, variable);
@@ -72,16 +76,31 @@ internal sealed partial class BodyEmitter
         il.MarkLabel(top);
         il.Emit(OpCodes.Ldloc, variable);
         il.Emit(OpCodes.Ldloc, limit);
-        il.Emit(statement.IsInclusive ? OpCodes.Bgt : OpCodes.Bge, end);
+        il.Emit(statement.IsInclusive ? (unsigned ? OpCodes.Bgt_Un : OpCodes.Bgt) : (unsigned ? OpCodes.Bge_Un : OpCodes.Bge), end);
 
         _loops.Push((Break: end, Continue: next));
         EmitBlock(statement.Body);
         _loops.Pop();
 
         il.MarkLabel(next);
+        if (statement.IsInclusive)
+        {
+            il.Emit(OpCodes.Ldloc, variable);
+            il.Emit(OpCodes.Ldloc, limit);
+            il.Emit(OpCodes.Beq, end);
+        }
+
         il.Emit(OpCodes.Ldloc, variable);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add_Ovf);
+        if (NumberTypes.Bits(type) == 64)
+        {
+            il.Emit(OpCodes.Ldc_I8, 1L);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_I4_1);
+        }
+
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, variable);
         il.Emit(OpCodes.Br, top);
         il.MarkLabel(end);

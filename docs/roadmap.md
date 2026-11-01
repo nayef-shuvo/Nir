@@ -1047,6 +1047,71 @@ with the exception's `message`; a call without `try` that throws still crashes. 
 call in `BoundProtectedCall` (`T9b.0`), Emit makes the call in a generated helper with a CLR try block (`T9b.1`), tests, golden programs
 and `samples/dotnet_errors.nir` (`T9b.2`). All done.
 
+**Slice 9c: the rest of the primitive types** (decisions D-083 to D-090; design.md "Numbers", "Number literals", "Strings and
+conversions", "Characters"). Adds `byte sbyte short ushort uint long ulong float decimal char` next to `int double bool string`.
+Done in the order below; every task ended with the full `dotnet test` green. **Done** (1,9xx tests green; see `CLAUDE.md`).
+
+Acceptance: a program that declares a value of each of the 12 number and char types, prints it (also inside `$"..."`), does arithmetic and
+comparisons on each, converts between them with `as` (including a failing conversion handled with `catch`), uses literals by
+context and with suffixes, loops over a `long` range and over `'a'..='z'`, and passes them through functions, struct fields and tuples.
+
+- [x] **T9c.1 The types exist**
+  - `TypeNames`, `ClrNames`, `ClrTypes`, the new `TypeSymbol` statics, `LookupPrimitive` and `FromClr` (so .NET methods with these types become
+    candidates); one place that answers "is integer / signed / floating / number / char" instead of today's `IsNumber(int || double)`.
+  - `print` and interpolation for every type. There is no `Console.WriteLine(byte | sbyte | short | ushort)`: widen those to `int` first.
+  - Tests: `let x: long = ...` is not yet writable, so test with parameters, struct fields and `.NET` calls (`Math::Abs(long)`); an unknown type
+    name still reports `NIR2006`. Check which older tests used a `long` / `char` result as their "unsupported .NET type" example and update them.
+  - **Done when:** these pass.
+
+- [x] **T9c.2 Conversions with `as`**
+  - The full matrix of D-086: IL for every pair (`conv.ovf.*`, `.un` variants for unsigned sources, `decimal` through its conversion operators
+    or constructors, `char` as an unsigned 16-bit integer); errors for `bool`, `string`, `char` with floating types.
+  - Tests: one binder test per rejected pair, one end-to-end test per source kind showing the value and the `OverflowException` case
+    (`300 as byte`, `-1 as ulong`, `3e9 as int`, `NaN as int`, `1e30 as decimal`).
+  - **Done when:** these pass.
+
+- [x] **T9c.3 Operators on every type**
+  - `BinaryResultType`, `BindUnary` and the emitter for all widths: checked `+ - *` followed by the narrowing conversion for 8/16-bit types, unsigned
+    division and remainder (`div.un`, `rem.un`) and comparisons (`clt.un`, `cgt.un`), IEEE `float`, `decimal` through `op_Addition` etc.,
+    unary `-` rules. Mixed types stay an error with the existing wording.
+  - Tests: an arithmetic table per type (including the overflow edge of each width), unsigned comparison of large values, `float` vs `double`
+    rounding, `decimal` exactness (`0.1m + 0.2m == 0.3m` style), `-x` on `uint` rejected.
+  - **Done when:** these pass.
+
+- [x] **T9c.4 Number literals**
+  - Lexer: a whole or fractional literal may end in `_<typename>`; the binder validates the suffix. Binder: pass an *expected type* into
+    literal binding (annotation, assignment, `return`, argument, field, other operand, range bound, unary minus); a negative literal is checked as a
+    whole; new diagnostics for out of range, suffix not allowed, whole-number literal where a fraction type is expected.
+  - Tests: lexer tokens, one binder test per context in design.md, every out-of-range edge (`255`/`256` byte, `-128`/`-129` sbyte, `u64` max),
+    `decimal` and `float` rounding of literals.
+  - **Done when:** these pass.
+
+- [x] **T9c.5 char**
+  - Lexer: `CHAR_LITERAL` with the escapes of D-088 (reuse `StringEscapes`), errors for `''`, `'ab'` and a non-BMP character; binder and emitter;
+    comparisons; `as` to and from integers (done in T9c.2, tested again here with literals).
+  - **Done when:** tests for every rule in design.md "Characters" pass.
+
+- [x] **T9c.6 Ranges over other types**
+  - `BindFor` / `BindRangeBound` take any integer type or `char` (same type both sides); the emitter's loop variable and limit locals use that
+    type; `a..=b` must not overflow when `b` is the maximum (`0..=255_byte` runs 256 times).
+  - Tests: `long`, `byte` (inclusive max), `uint`, `char` ranges; mixed bounds rejected; a `double` bound rejected.
+  - **Done when:** these pass.
+
+- [x] **T9c.7 `catch` and `try` on `as`**
+  - The conversion runs in a generated `Protected<n>` helper as .NET calls do (D-081); `big as byte catch 0`, `catch e => expr`, block handler, `try`.
+  - Tests: success path, failing path, the message text, `try` inside a function returning `anyerror!T`.
+  - **Done when:** these pass.
+
+- [x] **T9c.8 Programs, samples, docs**
+  - `Programs/slice9c/` golden programs, `samples/numbers.nir` (and an error sample per new diagnostic), leave `samples/test.nir`
+    (the user's scratch file, skipped by `SamplesTests`) alone; update `architecture.md` (types, conversions, literal typing, emit), `code-map.md`,
+    `CLAUDE.md` status, `docs/handoff.md`, `VS Code` grammar (char literals, literal suffixes, new type keywords).
+  - **Done when:** all acceptance items pass, a clean rebuild has 0 warnings, `dotnet test` is green.
+
+Additions made while building it (decision D-092): a tuple literal converted to a tuple type, and a union with exactly one fitting member,
+also type their literals; a .NET overload may be chosen through its literals; `try` on a conversion needs parentheses
+(`try (x as byte)`) because `try` binds tighter than `as`; a whole-number literal that wants a fraction type gets a hint in the error.
+
 **Slice 10: heap references.** `&T`, `&mut T`, `&T {...}`, `&` of a variable (hoisted to a `Ref<T>`), `?T`, null. Design
 sections 3, 4, 6, 7.
 

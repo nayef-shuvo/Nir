@@ -15,6 +15,14 @@ internal sealed partial class BodyEmitter
     // the try block lives in a method of its own.
     private void EmitProtectedCall(BoundProtectedCall protectedCall)
     {
+        // `value as T catch ...`: the conversion is the protected operation, with the operand worked out outside it.
+        if (protectedCall.Call is BoundConversion conversion)
+        {
+            EmitExpression(conversion.Operand);
+            il.Emit(OpCodes.Call, ProtectedConversion(conversion, protectedCall.Result));
+            return;
+        }
+
         ClrMethodSymbol target;
         BoundExpression? receiver = null;
         ImmutableArray<BoundExpression> arguments;
@@ -46,6 +54,18 @@ internal sealed partial class BodyEmitter
         il.Emit(OpCodes.Call, ProtectedHelper(target.Method, protectedCall.Result, receiver?.Type, [.. arguments.Select(a => a.Type)]));
     }
 
+    private MethodBuilder ProtectedConversion(BoundConversion conversion, ResultTypeSymbol result)
+    {
+        var key = (conversion.Operand.Type, conversion.Target);
+        return context.ProtectedHelpers.TryGetValue(key, out var existing)
+            ? existing
+            : DefineProtectedHelper(key, result, [context.ClrOf(conversion.Operand.Type)], il =>
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                NumberConversions.Emit(il, conversion.Operand.Type, conversion.Target);
+            });
+    }
+
     private MethodBuilder ProtectedHelper(MethodInfo method, ResultTypeSymbol result, TypeSymbol? receiverType, TypeSymbol[] argumentTypes)
     {
         if (context.ProtectedHelpers.TryGetValue(method, out var existing))
@@ -53,14 +73,52 @@ internal sealed partial class BodyEmitter
             return existing;
         }
 
-        var layout = context.Unions[result];
         var parameters = (receiverType is null ? argumentTypes : [receiverType, .. argumentTypes]).Select(context.ClrOf).ToArray();
+        return DefineProtectedHelper(method, result, parameters, il =>
+        {
+            var useCall = false;
+            if (receiverType is not null)
+            {
+                il.Emit(OpCodes.Ldarg_0);
+
+                // The same receiver handling as an unprotected call (EmitMemberCall).
+                var receiverClrType = receiverType.ClrType;
+                if (receiverClrType.IsValueType)
+                {
+                    if (method.DeclaringType is { IsValueType: true })
+                    {
+                        var temporary = il.DeclareLocal(receiverClrType);
+                        il.Emit(OpCodes.Stloc, temporary);
+                        il.Emit(OpCodes.Ldloca, temporary);
+                        useCall = true;
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Box, receiverClrType);
+                    }
+                }
+            }
+
+            for (var i = receiverType is null ? 0 : 1; i < parameters.Length; i++)
+            {
+                il.Emit(OpCodes.Ldarg, (short)i);
+            }
+
+            il.Emit(receiverType is null || useCall ? OpCodes.Call : OpCodes.Callvirt, method);
+        });
+    }
+
+    // A static method taking the operands of the protected operation and returning the E!T. `operation` loads the operands from the
+    // arguments and does the operation, leaving its value (if it has one) on the stack, inside the CLR try block.
+    private MethodBuilder DefineProtectedHelper(object key, ResultTypeSymbol result, Type[] parameters, Action<ILGenerator> operation)
+    {
+        var layout = context.Unions[result];
         var helper = context.Host.DefineMethod(
             GeneratedNames.ProtectedHelperPrefix + context.ProtectedHelpers.Count,
             MethodAttributes.Private | MethodAttributes.Static,
             layout.Type,
             parameters);
-        context.ProtectedHelpers[method] = helper;
+        context.ProtectedHelpers[key] = helper;
 
         var il = helper.GetILGenerator();
         var outcome = il.DeclareLocal(layout.Type);
@@ -68,35 +126,7 @@ internal sealed partial class BodyEmitter
         il.Emit(OpCodes.Initobj, layout.Type);
 
         il.BeginExceptionBlock();
-        var useCall = false;
-        if (receiverType is not null)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-
-            // The same receiver handling as an unprotected call (EmitMemberCall).
-            var receiverClrType = receiverType.ClrType;
-            if (receiverClrType.IsValueType)
-            {
-                if (method.DeclaringType is { IsValueType: true })
-                {
-                    var temporary = il.DeclareLocal(receiverClrType);
-                    il.Emit(OpCodes.Stloc, temporary);
-                    il.Emit(OpCodes.Ldloca, temporary);
-                    useCall = true;
-                }
-                else
-                {
-                    il.Emit(OpCodes.Box, receiverClrType);
-                }
-            }
-        }
-
-        for (var i = receiverType is null ? 0 : 1; i < parameters.Length; i++)
-        {
-            il.Emit(OpCodes.Ldarg, (short)i);
-        }
-
-        il.Emit(receiverType is null || useCall ? OpCodes.Call : OpCodes.Callvirt, method);
+        operation(il);
         if (result.Success is { } valueType)
         {
             var value = il.DeclareLocal(context.ClrOf(valueType));

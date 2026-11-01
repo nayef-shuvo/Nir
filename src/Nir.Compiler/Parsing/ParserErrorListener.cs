@@ -15,6 +15,7 @@ internal sealed partial class ParserErrorListener(SourceText source, DiagnosticB
         ["STRING_END"] = "a closing quote",
         ["INT_LITERAL"] = "a number",
         ["DOUBLE_LITERAL"] = "a number",
+        ["CHAR_LITERAL"] = "a character",
         ["IDENTIFIER"] = "a name",
         ["SEMI"] = "the end of a statement",
     };

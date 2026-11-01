@@ -507,5 +507,62 @@ public class LexerTests
     {
         Assert.Equal("RETURN SELF SEMI IDENTIFIER SEMI EOF", TokenFormatter.Names("return self\nx"));
     }
-}
 
+    // ---- number suffixes and characters (slice 9c) ----
+
+    [Theory]
+    [InlineData("200_byte")]
+    [InlineData("5_sbyte")]
+    [InlineData("5_short")]
+    [InlineData("5_ushort")]
+    [InlineData("5_int")]
+    [InlineData("5_uint")]
+    [InlineData("5_long")]
+    [InlineData("5_ulong")]
+    [InlineData("5_float")]
+    [InlineData("5_double")]
+    [InlineData("5_decimal")]
+    public void A_whole_number_may_end_in_a_type_suffix(string text)
+    {
+        Assert.Equal([$"INT_LITERAL '{text}'", "SEMI ''", "EOF"], TokenFormatter.Lex(text).Tokens);
+    }
+
+    [Theory]
+    [InlineData("2.5_float")]
+    [InlineData("2.5_double")]
+    [InlineData("2.5_decimal")]
+    public void A_number_with_a_fraction_may_end_in_a_type_suffix(string text)
+    {
+        Assert.Equal([$"DOUBLE_LITERAL '{text}'", "SEMI ''", "EOF"], TokenFormatter.Lex(text).Tokens);
+    }
+
+    [Fact]
+    public void A_word_that_is_not_a_type_is_not_a_suffix()
+    {
+        Assert.Equal(["INT_LITERAL '5'", "IDENTIFIER '_foo'", "SEMI ''", "EOF"], TokenFormatter.Lex("5_foo").Tokens);
+    }
+
+    [Fact]
+    public void A_suffixed_number_can_be_a_range_bound()
+    {
+        Assert.Equal("INT_LITERAL DOTDOTEQ INT_LITERAL SEMI EOF", TokenFormatter.Names("0_byte..=255_byte"));
+    }
+
+    [Theory]
+    [InlineData("'a'")]
+    [InlineData("'\\n'")]
+    [InlineData("'\\''")]
+    [InlineData("'\\0'")]
+    [InlineData("''")]
+    [InlineData("'ab'")]
+    public void A_character_literal_is_one_token(string text)
+    {
+        Assert.Equal([$"CHAR_LITERAL '{text}'", "SEMI ''", "EOF"], TokenFormatter.Lex(text).Tokens);
+    }
+
+    [Fact]
+    public void A_character_literal_can_end_a_statement()
+    {
+        Assert.Equal("LET IDENTIFIER EQ CHAR_LITERAL SEMI IDENTIFIER SEMI EOF", TokenFormatter.Names("let c = 'a'\nx"));
+    }
+}

@@ -1,0 +1,4 @@
+// Expect: NIR3003 "operator + cannot be applied to char and char" on line 3.
+fn main() {
+    let c = 'a' + 'b'
+}

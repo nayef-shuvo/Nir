@@ -1,0 +1,29 @@
+fn rot13(c: char) -> char {
+    if c >= 'a' && c <= 'z' {
+        return (((c as int) - 97 + 13) % 26 + 97) as char
+    }
+    return c
+}
+
+fn main() {
+    let mut line = ""
+    for c in 'a'..='z' {
+        line = line + $"{rot13(c)}"
+    }
+    print(line)
+    let mut digits = 0
+    for d in '0'..='9' {
+        digits = digits + (d as int) - ('0' as int)
+    }
+    print(digits)
+    let mut count = 0
+    for i in 250..=255_byte {
+        count = count + 1
+    }
+    print(count)
+    let mut big: long = 0
+    for i in 3000000000..3000000003_long {
+        big = big + i - 3000000000
+    }
+    print(big)
+}

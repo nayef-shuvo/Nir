@@ -1,0 +1,6 @@
+// Compiles. Prints 250, then crashes with System.OverflowException: every integer width is checked, not only int.
+fn main() {
+    let a: byte = 250
+    print(a)
+    print(a + 10_byte)
+}

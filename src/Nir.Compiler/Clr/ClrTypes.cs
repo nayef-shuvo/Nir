@@ -10,9 +10,29 @@ internal static class ClrTypes
 {
     public static readonly Type Void = ClrUniverse.CoreType(ClrNames.Void);
 
+    public static readonly Type Byte = ClrUniverse.CoreType(ClrNames.Byte);
+
+    public static readonly Type SByte = ClrUniverse.CoreType(ClrNames.SByte);
+
+    public static readonly Type Int16 = ClrUniverse.CoreType(ClrNames.Int16);
+
+    public static readonly Type UInt16 = ClrUniverse.CoreType(ClrNames.UInt16);
+
     public static readonly Type Int32 = ClrUniverse.CoreType(ClrNames.Int32);
 
+    public static readonly Type UInt32 = ClrUniverse.CoreType(ClrNames.UInt32);
+
+    public static readonly Type Int64 = ClrUniverse.CoreType(ClrNames.Int64);
+
+    public static readonly Type UInt64 = ClrUniverse.CoreType(ClrNames.UInt64);
+
+    public static readonly Type Single = ClrUniverse.CoreType(ClrNames.Single);
+
     public static readonly Type Double = ClrUniverse.CoreType(ClrNames.Double);
+
+    public static readonly Type Decimal = ClrUniverse.CoreType(ClrNames.Decimal);
+
+    public static readonly Type Char = ClrUniverse.CoreType(ClrNames.Char);
 
     public static readonly Type Boolean = ClrUniverse.CoreType(ClrNames.Boolean);
 

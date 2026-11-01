@@ -1,0 +1,8 @@
+fn main() {
+    let a: byte = 256
+    let b: sbyte = -129
+    let c = 128_sbyte
+    let d = 3000000000
+    let e: long = 3000000000
+    let f: uint = -1
+}

@@ -92,8 +92,10 @@ builds the bound tree. `Binder.cs` is the tiny static entry (`Binder.Bind(unit, 
 | `.Borrows.cs` | `&T` / `&mut T` parameters and `&x` arguments. |
 | `.Tuples.cs` | Type syntax resolution (`ResolveTypeSyntax`), tuple aliases, tuple literals, destructuring. |
 | `.Unions.cs` | Union declarations, **`Convert`** (the one place a value becomes a union), `match`. |
-| `.Errors.cs` | `E!T` types, `error` values, `try`, `catch`, protected .NET calls. |
-| `TypeSymbol.cs` | Base type: `int`, `double`, `bool`, `string`, `()`, error type. **`==` compares types** (tuples and results structurally). |
+| `.Errors.cs` | `E!T` types, `error` values, `try`, `catch`, protected .NET calls and protected `as` conversions. |
+| `.Literals.cs` | Number and character literals: `BindNumberLiteral` (suffix, range check), `Adapt` (a literal takes the type of its context), pending literals, `BindStatement` (reports literals nothing typed). |
+| `NumberTypes.cs` | Which primitive types are integers / signed / narrow / countable / ordered, and `Parse` (read a literal's text as a given type). The one place that knows. |
+| `TypeSymbol.cs` | Base type: the 12 number and char types, `bool`, `string`, `()`, error type. **`==` compares types** (tuples and results structurally). |
 | `StructTypeSymbol.cs` (+ `FieldSymbol`) | Struct or error type, its fields and methods. |
 | `TupleTypeSymbol.cs`, `UnionTypeSymbol.cs`, `ResultTypeSymbol.cs`, `AnyErrorTypeSymbol.cs`, `BorrowTypeSymbol.cs` | The other kinds of types. A result type *is* a union (`E!T` = union of `E` and `T`). |
 | `FunctionSymbol.cs` | `ClrMethodSymbol` (a .NET method or `print`) and `UserFunctionSymbol` (Nir function/method). |
@@ -112,12 +114,14 @@ builds the bound tree. `Binder.cs` is the tiny static entry (`Binder.Bind(unit, 
 | `BodyEmitter.cs` | One instance per function: locals, argument slots, `EmitBlock`, `EmitStatement`. The other `BodyEmitter.*.cs` files are the same partial class split by topic: |
 | `BodyEmitter.Expressions.cs` | `EmitExpression` (the big switch) and `EmitAddress` (places). |
 | `BodyEmitter.ControlFlow.cs` | `if`, `while`, `for`, `&&` / `||`. |
-| `BodyEmitter.Operators.cs` | Arithmetic and comparison, string `+` / `==`, interpolation. |
+| `BodyEmitter.Operators.cs` | String `+` / `==`, interpolation, `!` and the dispatch to negation. |
+| `BodyEmitter.Numbers.cs` | Number literals, arithmetic and comparison for every width (checked, narrowing, unsigned forms, `decimal` operators), negation. |
+| `NumberConversions.cs`, `NumberMethods.cs` | The IL of `as` between number types and `char` (usable from any `ILGenerator`, also in the `Protected<n>` helpers); the `System.Decimal` operators and conversions the emitter calls. |
 | `BodyEmitter.Calls.cs` | Calls into .NET (`EmitMemberCall`). |
 | `BodyEmitter.Aggregates.cs` | Struct and tuple literals, field loads, destructuring. |
 | `BodyEmitter.Unions.cs` | Wrapping a value into a union, `match`. |
 | `BodyEmitter.Errors.cs` | `error` values, `try`, `catch`, success of an `E!`. |
-| `BodyEmitter.Protected.cs` | The generated `Protected<n>` helpers that run a .NET call inside a CLR try block. |
+| `BodyEmitter.Protected.cs` | The generated `Protected<n>` helpers that run a .NET call, or an `as` conversion, inside a CLR try block. |
 | `EmitContext.cs` | Shared emit state: maps from symbols to `TypeBuilder`/`MethodBuilder`/`FieldBuilder`, `ClrOf(type)` (the one place Nir types become CLR types), `FieldPath`, `ValueTuple` handling (nested `Rest` past 7), caches. |
 | `StringMethods.cs` | The `String.Concat` and `op_Equality` methods the emitter calls for string `+`, `==`, interpolation. |
 | `RuntimeConfigWriter.cs` | Writes `program.runtimeconfig.json` (invariant globalization). |

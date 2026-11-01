@@ -1,0 +1,6 @@
+fn main() {
+    for i in 0..2.5 { }
+    for i in 0_int..5_long { }
+    for i in 0..=256_byte { }
+    for i in true..false { }
+}

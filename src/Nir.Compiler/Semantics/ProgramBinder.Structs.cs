@@ -199,7 +199,7 @@ internal sealed partial class ProgramBinder
             }
             else
             {
-                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{field.Type}'", initializer.Value.Span);
+                Error(DiagnosticCodes.TypeMismatch, ConversionMessage(value, field.Type), initializer.Value.Span);
                 failed = true;
             }
         }
@@ -275,7 +275,7 @@ internal sealed partial class ProgramBinder
             }
             else
             {
-                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{access.Type}'", assignment.Value.Span);
+                Error(DiagnosticCodes.TypeMismatch, ConversionMessage(value, access.Type), assignment.Value.Span);
             }
         }
 

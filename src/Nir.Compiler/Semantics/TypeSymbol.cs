@@ -9,9 +9,29 @@ public class TypeSymbol
     /// <summary>The "nothing" type <c>()</c>. Compiles to <c>void</c>.</summary>
     public static readonly TypeSymbol UnitType = new(TypeNames.UnitType, ClrTypes.Void);
 
+    public static readonly TypeSymbol ByteType = new(TypeNames.ByteType, ClrTypes.Byte);
+
+    public static readonly TypeSymbol SByteType = new(TypeNames.SByteType, ClrTypes.SByte);
+
+    public static readonly TypeSymbol ShortType = new(TypeNames.ShortType, ClrTypes.Int16);
+
+    public static readonly TypeSymbol UShortType = new(TypeNames.UShortType, ClrTypes.UInt16);
+
     public static readonly TypeSymbol IntType = new(TypeNames.IntType, ClrTypes.Int32);
 
+    public static readonly TypeSymbol UIntType = new(TypeNames.UIntType, ClrTypes.UInt32);
+
+    public static readonly TypeSymbol LongType = new(TypeNames.LongType, ClrTypes.Int64);
+
+    public static readonly TypeSymbol ULongType = new(TypeNames.ULongType, ClrTypes.UInt64);
+
+    public static readonly TypeSymbol FloatType = new(TypeNames.FloatType, ClrTypes.Single);
+
     public static readonly TypeSymbol DoubleType = new(TypeNames.DoubleType, ClrTypes.Double);
+
+    public static readonly TypeSymbol DecimalType = new(TypeNames.DecimalType, ClrTypes.Decimal);
+
+    public static readonly TypeSymbol CharType = new(TypeNames.CharType, ClrTypes.Char);
 
     public static readonly TypeSymbol BoolType = new(TypeNames.BoolType, ClrTypes.Boolean);
 
@@ -41,8 +61,18 @@ public class TypeSymbol
     internal static TypeSymbol? FromClr(Type clrType) => clrType.FullName switch
     {
         ClrNames.Void => UnitType,
+        ClrNames.Byte => ByteType,
+        ClrNames.SByte => SByteType,
+        ClrNames.Int16 => ShortType,
+        ClrNames.UInt16 => UShortType,
         ClrNames.Int32 => IntType,
+        ClrNames.UInt32 => UIntType,
+        ClrNames.Int64 => LongType,
+        ClrNames.UInt64 => ULongType,
+        ClrNames.Single => FloatType,
         ClrNames.Double => DoubleType,
+        ClrNames.Decimal => DecimalType,
+        ClrNames.Char => CharType,
         ClrNames.Boolean => BoolType,
         ClrNames.String => StringType,
         _ => null,

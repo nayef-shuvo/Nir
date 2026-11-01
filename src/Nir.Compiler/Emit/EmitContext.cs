@@ -26,7 +26,7 @@ internal sealed class EmitContext
     public TypeBuilder Host { get; set; } = null!;
 
     /// <summary>The helper that runs one .NET method inside a CLR try block (see <c>BoundProtectedCall</c>), made on first use.</summary>
-    public Dictionary<MethodInfo, MethodBuilder> ProtectedHelpers { get; } = [];
+    public Dictionary<object, MethodBuilder> ProtectedHelpers { get; } = [];
 
     /// <summary>The class every error derives from (<c>anyerror</c>), defined once per program.</summary>
     public TypeBuilder AnyError { get; set; } = null!;

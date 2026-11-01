@@ -14,8 +14,9 @@ internal sealed partial class ProgramBinder
     private BoundExpression BindExpression(Expression expression) => expression switch
     {
         StringLiteralExpression s => new BoundStringLiteral(s.Value),
-        IntLiteralExpression i => BindIntLiteral(i),
-        DoubleLiteralExpression d => BindDoubleLiteral(d),
+        IntLiteralExpression i => BindNumberLiteral(i.Text, i.Span, isFraction: false, negative: false),
+        DoubleLiteralExpression d => BindNumberLiteral(d.Text, d.Span, isFraction: true, negative: false),
+        CharLiteralExpression c => BindCharLiteral(c),
         BoolLiteralExpression b => new BoundBoolLiteral(b.Value),
         CallExpression c => BindCall(c),
         MemberCallExpression m => BindMemberCall(m),
@@ -97,13 +98,13 @@ internal sealed partial class ProgramBinder
             return value;
         }
 
-        // int, double and bool all have ToString() with no parameters that returns a string.
+        // Every number type, char and bool have ToString() with no parameters that returns a string.
         var toString = ClrMethods.FindCandidates(value.Type.ClrType, "ToString", isStatic: false)
             .First(c => c.ParameterTypes.Length == 0 && c.ReturnType == TypeSymbol.StringType);
         return new BoundMemberCallExpression(value, new ClrMethodSymbol("ToString", toString.Method, TypeSymbol.StringType, []), []);
     }
 
-    // `x as T` converts between int and double only (design.md "Strings and conversions").
+    // `x as T` converts between the number types, and between char and the integer types (design.md "Strings and conversions").
     private BoundExpression BindCast(CastExpression cast)
     {
         var operand = BindExpression(cast.Operand);
@@ -119,7 +120,7 @@ internal sealed partial class ProgramBinder
             return operand;
         }
 
-        if (!IsNumber(operand.Type) || !IsNumber(target))
+        if (!CanConvert(operand.Type, target))
         {
             Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{operand.Type}' to '{target}'", cast.Span);
             return new BoundErrorExpression();
@@ -128,7 +129,11 @@ internal sealed partial class ProgramBinder
         return operand.Type == target ? operand : new BoundConversion(operand, target);
     }
 
-    private static bool IsNumber(TypeSymbol type) => type == TypeSymbol.IntType || type == TypeSymbol.DoubleType;
+    // Any number to any number, and char to and from the integers. Not bool, string or anything else, and not char to a fraction type.
+    private static bool CanConvert(TypeSymbol from, TypeSymbol to) =>
+        (NumberTypes.IsNumber(from) && NumberTypes.IsNumber(to)) ||
+        (NumberTypes.IsChar(from) && NumberTypes.IsInteger(to)) ||
+        (NumberTypes.IsInteger(from) && NumberTypes.IsChar(to));
 
     private BoundExpression BindName(NameExpression name)
     {
@@ -143,6 +148,14 @@ internal sealed partial class ProgramBinder
 
     private BoundExpression BindUnary(UnaryExpression unary)
     {
+        // A minus in front of a number literal is part of the literal, so `-128` fits an sbyte and `-2147483648` an int.
+        if (unary.Operator == UnaryOperator.Negate && unary.Operand is IntLiteralExpression or DoubleLiteralExpression)
+        {
+            return unary.Operand is IntLiteralExpression whole
+                ? BindNumberLiteral(whole.Text, unary.Span, isFraction: false, negative: true)
+                : BindNumberLiteral(((DoubleLiteralExpression)unary.Operand).Text, unary.Span, isFraction: true, negative: true);
+        }
+
         var operand = BindExpression(unary.Operand);
         if (operand.Type == TypeSymbol.ErrorType)
         {
@@ -152,7 +165,7 @@ internal sealed partial class ProgramBinder
         var isNot = unary.Operator == UnaryOperator.Not;
         var accepted = isNot
             ? operand.Type == TypeSymbol.BoolType
-            : operand.Type == TypeSymbol.IntType || operand.Type == TypeSymbol.DoubleType;
+            : NumberTypes.IsSignedInteger(operand.Type) || NumberTypes.IsFloatingPoint(operand.Type) || NumberTypes.IsDecimal(operand.Type);
         if (!accepted)
         {
             Error(
@@ -174,6 +187,13 @@ internal sealed partial class ProgramBinder
             return new BoundErrorExpression();
         }
 
+        // A literal on one side takes the type of the other side (`count + 1` with a long count).
+        (left, right) = MatchLiteral(left, right);
+        if (left.Type == TypeSymbol.ErrorType || right.Type == TypeSymbol.ErrorType)
+        {
+            return new BoundErrorExpression();
+        }
+
         var resultType = BinaryResultType(binary.Operator, left.Type, right.Type);
         if (resultType is null)
         {
@@ -187,6 +207,28 @@ internal sealed partial class ProgramBinder
         return new BoundBinaryExpression(ToBoundOperator(binary.Operator), left, right, resultType);
     }
 
+    // If exactly one operand is a literal without a type that suits the other operand, it takes that type. An out-of-range value is
+    // reported here and comes back as an error expression.
+    private (BoundExpression Left, BoundExpression Right) MatchLiteral(BoundExpression left, BoundExpression right)
+    {
+        if (left.Type == right.Type && left is not BoundNumberLiteral { Value: null } && right is not BoundNumberLiteral { Value: null })
+        {
+            return (left, right);
+        }
+
+        if (CanAdapt(right, left.Type))
+        {
+            return (left, Adapt((BoundNumberLiteral)right, left.Type));
+        }
+
+        if (CanAdapt(left, right.Type))
+        {
+            return (Adapt((BoundNumberLiteral)left, right.Type), right);
+        }
+
+        return (left, right);
+    }
+
     // Both operands must have the same type; there are no implicit conversions (design.md, "Numbers").
     private static TypeSymbol? BinaryResultType(BinaryOperator op, TypeSymbol left, TypeSymbol right)
     {
@@ -195,7 +237,7 @@ internal sealed partial class ProgramBinder
             return null;
         }
 
-        var isNumber = IsNumber(left);
+        var isNumber = NumberTypes.IsNumber(left);
         var isString = left == TypeSymbol.StringType;
         return op switch
         {
@@ -203,9 +245,9 @@ internal sealed partial class ProgramBinder
             BinaryOperator.Subtract or BinaryOperator.Multiply or BinaryOperator.Divide or BinaryOperator.Remainder
                 => isNumber ? left : null,
             BinaryOperator.Less or BinaryOperator.LessOrEqual or BinaryOperator.Greater or BinaryOperator.GreaterOrEqual
-                => isNumber ? TypeSymbol.BoolType : null,
+                => NumberTypes.IsOrdered(left) ? TypeSymbol.BoolType : null,
             BinaryOperator.Equal or BinaryOperator.NotEqual
-                => isNumber || isString || left == TypeSymbol.BoolType ? TypeSymbol.BoolType : null,
+                => isNumber || isString || NumberTypes.IsChar(left) || left == TypeSymbol.BoolType ? TypeSymbol.BoolType : null,
             BinaryOperator.And or BinaryOperator.Or
                 => left == TypeSymbol.BoolType ? TypeSymbol.BoolType : null,
             _ => throw new UnreachableException(),
@@ -229,27 +271,4 @@ internal sealed partial class ProgramBinder
         BinaryOperator.Or => BoundBinaryOperator.Or,
         _ => throw new UnreachableException(),
     };
-
-    private BoundExpression BindIntLiteral(IntLiteralExpression literal)
-    {
-        if (int.TryParse(literal.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var value))
-        {
-            return new BoundIntLiteral(value);
-        }
-
-        Error(DiagnosticCodes.LiteralOutOfRange, $"'{literal.Text}' is out of range for '{TypeSymbol.IntType}'", literal.Span);
-        return new BoundErrorExpression();
-    }
-
-    private BoundExpression BindDoubleLiteral(DoubleLiteralExpression literal)
-    {
-        var value = double.Parse(literal.Text, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
-        if (double.IsInfinity(value))
-        {
-            Error(DiagnosticCodes.LiteralOutOfRange, $"'{literal.Text}' is out of range for '{TypeSymbol.DoubleType}'", literal.Span);
-            return new BoundErrorExpression();
-        }
-
-        return new BoundDoubleLiteral(value);
-    }
 }

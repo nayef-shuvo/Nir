@@ -208,6 +208,7 @@ public abstract class NirLexerBase : Antlr4.Runtime.Lexer
         NirLexer.IDENTIFIER or
         NirLexer.INT_LITERAL or
         NirLexer.DOUBLE_LITERAL or
+        NirLexer.CHAR_LITERAL or
         NirLexer.TRUE or
         NirLexer.FALSE or
         NirLexer.RETURN or

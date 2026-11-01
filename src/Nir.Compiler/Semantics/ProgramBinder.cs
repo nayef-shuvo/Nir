@@ -144,7 +144,7 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
         }
     }
 
-    private BoundStatement BindStatement(Statement statement) => statement switch
+    private BoundStatement BindStatementCore(Statement statement) => statement switch
     {
         ExpressionStatement { Expression: MatchExpression match } => new BoundExpressionStatement(BindMatch(match, isStatement: true)),
         ExpressionStatement s => new BoundExpressionStatement(BindStatementValue(s.Expression)),

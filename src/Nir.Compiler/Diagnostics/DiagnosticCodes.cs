@@ -167,4 +167,10 @@ public static class DiagnosticCodes
 
     /// <summary>No overload of a function accepts the given argument types.</summary>
     public const string NoMatchingOverload = "NIR3006";
+
+    /// <summary>A literal suffix its literal cannot have, such as <c>2.5_int</c>.</summary>
+    public const string LiteralSuffixNotAllowed = "NIR3029";
+
+    /// <summary>A character literal that does not hold exactly one character.</summary>
+    public const string InvalidCharLiteral = "NIR3030";
 }

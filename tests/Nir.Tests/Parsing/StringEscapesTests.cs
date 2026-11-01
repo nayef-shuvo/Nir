@@ -7,7 +7,7 @@ public class StringEscapesTests
     private static (string Decoded, List<(int Offset, int Length, string Text)> Unknown) Decode(string raw, bool interpolated = false)
     {
         var unknown = new List<(int, int, string)>();
-        var decoded = StringEscapes.Decode(raw, interpolated, (offset, length, text) => unknown.Add((offset, length, text)));
+        var decoded = StringEscapes.Decode(raw, interpolated, forCharacter: false, (offset, length, text) => unknown.Add((offset, length, text)));
         return (decoded, unknown);
     }
 

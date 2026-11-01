@@ -433,6 +433,7 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         NirParser.CastExpressionContext c => BuildCast(c),
         NirParser.IntExprContext i => new IntLiteralExpression(i.INT_LITERAL().GetText(), SpanOf(i)),
         NirParser.DoubleExprContext d => new DoubleLiteralExpression(d.DOUBLE_LITERAL().GetText(), SpanOf(d)),
+        NirParser.CharExprContext c => BuildCharLiteral(c.CHAR_LITERAL().Symbol),
         NirParser.TrueExprContext t => new BoolLiteralExpression(true, SpanOf(t)),
         NirParser.FalseExprContext f => new BoolLiteralExpression(false, SpanOf(f)),
         NirParser.NameExprContext n => BuildIdentifier(n.IDENTIFIER().Symbol) is { } name ? new NameExpression(name, SpanOf(n)) : null,
@@ -600,6 +601,25 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         return new StringLiteralExpression(Decode(text, interpolated: false), SpanOf(context));
     }
 
+    // 'a': the text between the quotes, decoded. Whether it is exactly one character is the binder's check.
+    private CharLiteralExpression? BuildCharLiteral(IToken token)
+    {
+        if (IsMissing(token))
+        {
+            return null;
+        }
+
+        var raw = token.Text[1..^1];
+        var decoded = StringEscapes.Decode(raw, interpolated: false, forCharacter: true, (offset, length, text) =>
+            diagnostics.Report(
+                DiagnosticCodes.UnknownEscape,
+                Severity.Error,
+                $"unknown escape sequence '{text}'",
+                source,
+                new TextSpan(token.StartIndex + 1 + offset, length)));
+        return new CharLiteralExpression(decoded, SpanOf(token));
+    }
+
     private InterpolatedStringExpression BuildInterpolated(NirParser.InterpolatedStringContext context)
     {
         var parts = ImmutableArray.CreateBuilder<InterpolatedStringPart>();
@@ -634,7 +654,7 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
             return string.Empty;
         }
 
-        return StringEscapes.Decode(token.Text, interpolated, (offset, length, text) =>
+        return StringEscapes.Decode(token.Text, interpolated, forCharacter: false, (offset, length, text) =>
             diagnostics.Report(
                 DiagnosticCodes.UnknownEscape,
                 Severity.Error,

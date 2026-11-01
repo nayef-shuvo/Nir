@@ -113,19 +113,22 @@ internal sealed partial class ProgramBinder
         return BindClrCall(callSpan, method.Text, $"{type.Name}.{method.Text}", candidates, arguments);
     }
 
-    // Chooses the overload whose parameter types equal the argument types exactly (design.md: no implicit conversions).
+    // Chooses the overload whose parameter types equal the argument types exactly (design.md: no implicit conversions), except
+    // that a number literal without a suffix may take the type of the parameter (see ChooseClrMethod).
     private BoundExpression BindClrCall(
         TextSpan callSpan,
         string name,
         string displayName,
         IReadOnlyList<ClrCandidate> candidates,
         ImmutableArray<BoundExpression> arguments) =>
-        ChooseClrMethod(callSpan, name, displayName, candidates, arguments) is { } symbol
-            ? new BoundCallExpression(symbol, arguments)
+        ChooseClrMethod(callSpan, name, displayName, candidates, arguments) is var (symbol, adapted)
+            ? new BoundCallExpression(symbol, adapted)
             : new BoundErrorExpression();
 
-    // Reports the error and returns null if there is no usable overload.
-    private ClrMethodSymbol? ChooseClrMethod(
+    // Reports the error and returns null if there is no usable overload. If no overload matches exactly, the overloads that would
+    // match once literals take their parameter's type are tried, and the one that remains (there must be exactly one) is used:
+    // `Math::Max(count, 1)` with a long `count` calls Max(long, long).
+    private (ClrMethodSymbol Symbol, ImmutableArray<BoundExpression> Arguments)? ChooseClrMethod(
         TextSpan callSpan,
         string name,
         string displayName,
@@ -140,6 +143,13 @@ internal sealed partial class ProgramBinder
         }
 
         var match = sameArity.FirstOrDefault(c => Accepts(c, arguments));
+        var chosenArguments = arguments;
+        if (match is null && sameArity.Where(c => AcceptsWithLiterals(c, arguments)).ToList() is [var viaLiterals])
+        {
+            match = viaLiterals;
+            chosenArguments = [.. arguments.Select((argument, i) => CanAdapt(argument, viaLiterals.ParameterTypes[i]) ? Adapt((BoundNumberLiteral)argument, viaLiterals.ParameterTypes[i]) : argument)];
+        }
+
         if (match is null)
         {
             var types = string.Join(", ", arguments.Select(a => a.Type));
@@ -156,7 +166,7 @@ internal sealed partial class ProgramBinder
             return null;
         }
 
-        return new ClrMethodSymbol(name, match.Method, returnType, match.ParameterTypes);
+        return (new ClrMethodSymbol(name, match.Method, returnType, match.ParameterTypes), chosenArguments);
     }
 
     // `receiver.Method(args)`: the method of the .NET type that the receiver's Nir type stands for.
@@ -184,14 +194,22 @@ internal sealed partial class ProgramBinder
 
         var candidates = ClrMethods.FindCandidates(receiver.Type.ClrType, call.Method.Text, isStatic: false);
         var clrArguments = RejectBorrows(call.Arguments, arguments);
-        return ChooseClrMethod(call.Span, call.Method.Text, $"{typeName}.{call.Method.Text}", candidates, clrArguments) is { } symbol
-            ? new BoundMemberCallExpression(receiver, symbol, clrArguments)
+        return ChooseClrMethod(call.Span, call.Method.Text, $"{typeName}.{call.Method.Text}", candidates, clrArguments) is var (symbol, adapted)
+            ? new BoundMemberCallExpression(receiver, symbol, adapted)
             : new BoundErrorExpression();
     }
 
     // An error-typed argument fits any parameter: its own error is already reported.
     private static bool Accepts(ClrCandidate candidate, ImmutableArray<BoundExpression> arguments) =>
         arguments.Select((argument, i) => argument.Type == TypeSymbol.ErrorType || argument.Type == candidate.ParameterTypes[i]).All(fits => fits);
+
+    // Like Accepts, but a number literal without a suffix also fits a parameter of a number type that can hold its value.
+    private static bool AcceptsWithLiterals(ClrCandidate candidate, ImmutableArray<BoundExpression> arguments) =>
+        arguments.Select((argument, i) =>
+            argument.Type == TypeSymbol.ErrorType ||
+            argument.Type == candidate.ParameterTypes[i] ||
+            (CanAdapt(argument, candidate.ParameterTypes[i]) && NumberTypes.Parse(((BoundNumberLiteral)argument).Text, candidate.ParameterTypes[i]) is not null))
+            .All(fits => fits);
 
     private void ReportWrongArgumentCount(TextSpan callSpan, string name, int expected, int actual) =>
         Error(DiagnosticCodes.WrongArgumentCount, $"'{name}' expects {expected} argument(s) but got {actual}", callSpan);

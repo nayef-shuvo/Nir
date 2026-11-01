@@ -73,10 +73,52 @@ fn main() {
 
 ### Numbers [locked]
 
-- Primitive types: `int` (32-bit), `double`, `bool`, `string`. There is no `float` for now.
-- No implicit conversions between numeric types. `1 + 2.5` is an error. Conversions are written with `as` (see "Strings and conversions").
-- Integer arithmetic overflow throws, so `2147483647 + 1` crashes with an `OverflowException`. A build flag to switch to
-  wrapping arithmetic may come later. Integer division by zero also crashes (CLR behavior), like any unrecoverable failure.
+- Primitive types (slice 9c, D-083), named like C#'s keywords:
+
+  | Kind | Types |
+  |---|---|
+  | Signed integers | `sbyte` (8), `short` (16), `int` (32), `long` (64) |
+  | Unsigned integers | `byte` (8), `ushort` (16), `uint` (32), `ulong` (64) |
+  | Floating point | `float` (32-bit), `double` (64-bit), `decimal` (128-bit, base 10) |
+  | Other | `char` (one UTF-16 code unit), `bool`, `string` |
+
+- No implicit conversions between numeric types. `1 + 2.5` is an error, and so is `a + b` with `a: int` and `b: long`: both sides of an
+  operator must have the same type, and so must the two sides of `==`, `<`, ... Conversions are written with `as` (see "Strings and conversions").
+- Integer arithmetic overflow throws, so `2147483647 + 1` and `250_byte + 10_byte` crash with an `OverflowException`; this holds for every
+  integer type. A build flag to switch to wrapping arithmetic may come later. Integer division by zero also crashes (CLR behavior), like
+  any unrecoverable failure. `float` and `double` follow IEEE (`1.0 / 0.0` is infinity); `decimal` throws on overflow and division by zero.
+- Operators on numbers: `+ - * / %` and the comparisons work on every integer, `float`, `double` and `decimal`; the result of an
+  arithmetic operator has the type of its operands. Unary `-` works on signed integers, `float`, `double` and `decimal`, and is an error on
+  unsigned integers (`0_uint - x` is allowed and throws when `x` is not 0, like any other overflow).
+
+### Number literals [locked, slice 9c: D-084]
+
+A literal without a suffix gets its type from the place where it is used, when it fits; otherwise it is `int` (a whole number) or
+`double` (a number with a fraction). A suffix `_type` always wins.
+
+```
+let a: byte = 200            // the annotation types the literal
+let b = 5_long               // a suffix: b is a long
+let c: float = 2.5           // a fraction fits float, double and decimal
+let d = b + 1                // 1 takes the type of the other operand: long
+let e = a + 100              // 100 is a byte here; 200 + 100 would throw at run time
+let f: byte = 300            // error: '300' is out of range for 'byte'
+let g: double = 1            // error: a whole-number literal fits integer types only (write 1.0, or 1_double)
+```
+
+- Where a literal is typed by context: a `let` with an annotation, an assignment, a `return`, a call argument, a struct field, the other
+  operand of a binary operator (also in `a..b`), an element of a tuple literal that is converted to a tuple type
+  (`let p: (char, long) = ('Z', 5)`), and the one member of a union (such as `anyerror!long`) that the literal fits. For a .NET method the
+  overload is chosen by exact types first; if none matches, the one overload that fits once the literals take their parameter's type is
+  used (`Math::Max(count, 1)` with a `long` count). Anywhere else, and in the operand of `as`, it is `int` / `double`.
+- Only the literal itself adapts, not an expression made of literals: with a `long` `n`, `n + 1 + 2` works but `1 + 2 + n` does not
+  (`1 + 2` is an `int`); write `n + 3` or `3_long + n`.
+- A whole-number literal can adapt to the integer types only; a literal with a fraction to `float`, `double` and `decimal` only.
+  A suffix may turn a whole-number literal into `float`, `double` or `decimal` (`5_decimal`).
+- Suffixes are the type names after an underscore: `_sbyte _byte _short _ushort _int _uint _long _ulong _float _double _decimal`.
+  A suffix the literal cannot have is an error (`2.5_int`).
+- A negative literal is checked as a whole, so `-128` fits `sbyte`. There are no hex or binary literals and no digit separators yet.
+- A literal that does not fit its type is an error at compile time, never a run-time crash.
 
 ### Control flow [locked]
 
@@ -111,7 +153,9 @@ fn main() {
   always required; parentheses around a condition are not needed.
 - `if` is a statement, not an expression. `else` may be on the next line.
 - `while condition { }` and `for i in a..b { }`. The end of `a..b` is not included; `a..=b` includes it. In a `for`,
-  `a` and `b` must be `int`, they are evaluated once before the loop, and `i` is a new immutable `int` for each pass.
+  `a` and `b` must have the same type, any integer type or `char` (slice 9c, D-089), they are evaluated once before the loop, and `i` is a
+  new immutable variable of that type for each pass (`0..n` with `n: long` makes `i` a `long`). `a..=b` also works when `b` is the largest
+  value of its type (`0..=255_byte`).
   Looping over collections comes later. There is no `loop { }`; write `while true { }`.
 - `break` leaves the innermost loop and `continue` starts its next pass. There are no labels. Using either outside a
   loop is an error.
@@ -146,9 +190,38 @@ fn main() {
   the value's `ToString()` with invariant culture (`True`, `2.5`, `42`). Write `{{` and `}}` for literal braces. A hole can
   contain strings, calls and nested interpolated strings.
 - Escapes, in plain and interpolated strings: `\n` `\t` `\r` `\\` `\"` `\{`. Any other backslash sequence is an error.
-- `x as double` and `d as int` convert between `int` and `double` and nothing else. `int` to `double` is exact for every
-  `int`. `double` to `int` cuts off the fraction toward zero and throws (crashes) when the value does not fit or is `NaN`,
-  like the other checked arithmetic. `as` binds tighter than `*` and looser than unary `-`, so `-x as double` is `(-x) as double`.
+- `x as T` converts between the number types (slice 9c, D-086), and between `char` and the integer types. Nothing else converts: not
+  `bool`, not `string`, not `char` to or from `float` / `double` / `decimal`. Every `as` is checked: a value that does not fit
+  the target (`300 as byte`, `-1 as ulong`, `3000000000_long as int`) throws an `OverflowException`, and so does a `NaN` or infinity going to an
+  integer. A fraction going to an integer is cut off toward zero. Whole numbers to `double` / `float` round to the nearest
+  value that fits; `decimal` to `float` / `double` likewise; a `float` / `double` to `decimal` throws when it is too large.
+  `as` binds tighter than `*` and looser than unary `-`, so `-x as double` is `(-x) as double`. Converting to the same type does nothing.
+- The conversion that throws can be handled with `catch` (and passed on with `try`), like a call into .NET (D-087):
+
+  ```
+  let small = big as byte catch 0                       // 0 when big does not fit
+  let n = ratio as int catch e => -1                    // a handler that sees the error, same rules as for any catch
+  ```
+
+  The exception becomes an `anyerror` whose `message` is the exception's message. `try` binds tighter than `as`, so a
+  conversion that is passed on is written with parentheses: `let b = try (x as byte)`.
+
+### Characters [locked, slice 9c: D-088]
+
+A `char` is one UTF-16 code unit. A literal is written between single quotes, with the escapes of strings plus `\'` and `\0`:
+
+```
+let c = 'a'
+let nl = '\n'
+let quote = '\''
+let next = ((c as int) + 1) as char       // 'b': there is no arithmetic on char
+print($"{c} {next} {c < next}")           // a b True
+```
+
+- Exactly one character: `''` and `'ab'` are errors, and so is a character outside the Basic Multilingual Plane (it needs two UTF-16 units).
+- On two chars, `==`, `!=`, `<`, `<=`, `>`, `>=` work (by code unit). `+ - * / %` do not; convert with `as`.
+- A `char` can be printed, put in `{ }` of an interpolated string (its text is the character), be a parameter, result, struct field, tuple
+  element or union member, and be the bounds of a range (`for c in 'a'..='z'`).
 
 ## 2. Type declarations [struct locked, tuple locked]
 
@@ -177,7 +250,7 @@ type Point = struct {
 A **struct literal** names the type and gives every field exactly once, in any order, with `=` (the same style as named
 arguments), separated by commas or newlines: `Point { x = 1, y = 2 }`. There are no default values. Inside its own `impl`
 a struct is also called `Self`. A struct cannot contain itself by value (`type A = struct { a: A }` is an error), and its
-fields can be `int`, `double`, `bool`, `string` or another struct.
+fields can be any primitive type (`int`, `long`, `double`, `char`, `bool`, `string`, ...) or another struct.
 
 A struct literal cannot appear directly in the head of an `if`, `while` or `for`, because `limit {` would look like the
 start of a struct literal. Put it in parentheses: `if p == (Point { x = 1, y = 2 }) { }` (and `==` on structs is not

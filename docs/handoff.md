@@ -7,9 +7,10 @@ Written at the end of a long working session so the next one can start without t
 
 - Repo: `/mnt/Codes/Project/Nir` (it was `Nir2` until the old `Nir` was removed and this one renamed), branch `main`, working tree clean, **nothing is pushed** (never push unless asked).
 - Last commit: `b42177c` "Add the bank demo app and a test that every sample works".
-- `dotnet build` finishes with 0 warnings and 0 errors; `dotnet test` passes 1374 tests.
+- `dotnet build` finishes with 0 warnings and 0 errors; `dotnet test` passes 1830 tests (slice 9c is done and uncommitted when this line was updated).
 - Done slices: 1 hello world, 2 bindings and arithmetic, 3 functions, 4 C# interop, 5 control flow, 6 strings and conversions,
-  7 structs / methods / borrows, 8a tuples, 8b unions and `match`, 9a errors in Nir, 9b `try` / `catch` on .NET calls.
+  7 structs / methods / borrows, 8a tuples, 8b unions and `match`, 9a errors in Nir, 9b `try` / `catch` on .NET calls,
+  9c the rest of the primitive types (`byte sbyte short ushort uint long ulong float decimal char`; D-083 to D-092).
   Since slice 9b: the emitter was split into partial files, the language and .NET names became constants, reflection lookups are
   cached, a VS Code highlighting extension was added (`editors/vscode-nir/`), a demo app was written (`samples/apps/bank.nir`),
   and `SamplesTests` keeps every sample working.
@@ -79,6 +80,12 @@ offer to pull properties (and then arrays) forward. Slice 11 is modules (`namesp
 
 ## 4. Things learned the hard way
 
+- **Number literals (slice 9c).** A literal without a suffix is a `BoundNumberLiteral` with `CanAdapt`; `Convert` and `MatchLiteral` give it the
+  type of its context (`ProgramBinder.Literals.cs`). A whole number too big for `int` waits in `_pendingLiterals` until its statement is bound.
+  `NumberTypes` is the one place that classifies number types; do not list types elsewhere. `try` binds tighter than `as`: `try (x as byte)`.
+- **Do not kill a running `dotnet build`.** The first build downloads a JRE (about 40 MB, slow on this machine) into `~/.jre`; interrupting it
+  leaves a half-extracted folder and "Cannot find Java executable". Delete `~/.jre/jdk-*` and the tarball and let one build finish.
+  Also, stale MSBuild nodes can hang a build: `dotnet build-server shutdown`.
 - **CLR types.** All CLR types used by the compiler come from `Clr/ClrUniverse` (a `MetadataLoadContext`), never `typeof(...)`;
   mixing breaks the emitted program ("entry point must have a return type of void"). Use `Clr/ClrTypes` for the common ones.
   The one exception is `ValueTuple` over a struct still being built, where the runtime's own generic definition is used

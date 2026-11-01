@@ -32,6 +32,10 @@ Update this block whenever a task is completed.
 - Slice 9b (`try` / `catch` on .NET calls): **done** (1304 tests green).
 - After 9b: emitter split into partial files, names moved into constants (`Language/`, `Clr/ClrNames`), VS Code highlighting
   (`editors/vscode-nir/`), the bank demo (`samples/apps/bank.nir`), `SamplesTests`. 1374 tests green.
+- Slice 9c (the rest of the primitive types): **done** (1830 tests green). `byte sbyte short ushort uint long ulong float decimal char`
+  next to `int double bool string`; literals take their type from context or a suffix (`200_byte`); `as` is checked between all number
+  types and `char`; `catch` works on `as`; ranges run over any integer type and `char`. `samples/test.nir` is the user's scratch file:
+  never commit it, never depend on it.
 - Next: **slice 10 (heap references)**. Ask the user its open design decisions first (design.md sections 3, 4, 6, 7, 12), then
   write the `T10.x` tasks in `docs/roadmap.md`.
 

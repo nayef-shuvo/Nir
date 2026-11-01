@@ -1,0 +1,23 @@
+type Reading = struct { id: ushort, value: float }
+
+fn scale(x: long) -> long {
+    return x * 2
+}
+
+fn make() -> (byte, long) {
+    return (7, 3000000000)
+}
+
+fn main() {
+    let r = Reading { id = 65000, value = 0.5 }
+    let mut total: short = -300
+    total = total + 1
+    print($"{r.id} {r.value} {total}")
+    print(scale(21))
+    let pair = make()
+    print($"{pair.0} {pair.1}")
+    let n = 10_ulong
+    print(n * 3 + 1)
+    print(n == 10)
+    print(2.5_float * 2.0)
+}

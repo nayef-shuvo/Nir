@@ -1,0 +1,9 @@
+fn main() {
+    let a = 1_int + 2_long
+    let b = 1_byte * 2_sbyte
+    let c = 2.5_float + 2.5
+    let d = 1 + 2.5
+    let n: long = 5
+    let e = n + 1
+    let f: int = n
+}

@@ -1,0 +1,4 @@
+// Expect: NIR3001 "cannot convert char to double" on line 3.
+fn main() {
+    let d = 'a' as double
+}

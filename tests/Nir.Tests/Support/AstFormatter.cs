@@ -65,6 +65,7 @@ internal static class AstFormatter
         StringLiteralExpression s => $"StringLiteral \"{s.Value}\"",
         IntLiteralExpression i => $"IntLiteral {i.Text}",
         DoubleLiteralExpression d => $"DoubleLiteral {d.Text}",
+        CharLiteralExpression c => $"CharLiteral '{c.Value}'",
         BoolLiteralExpression b => $"BoolLiteral {(b.Value ? "true" : "false")}",
         VariableDeclaration d => $"VariableDeclaration let {(d.IsMutable ? "mut " : string.Empty)}{d.Name.Text}{(d.DeclaredType is { } t ? ": " + t.Text : string.Empty)}",
         AssignmentStatement a => $"Assignment {TargetText(a.Target)}",
@@ -165,7 +166,7 @@ internal static class AstFormatter
         BinaryExpression b => [b.Left, b.Right],
         UnaryExpression u => [u.Operand],
         ParenthesizedExpression p => [p.Inner],
-        StringLiteralExpression or IntLiteralExpression or DoubleLiteralExpression or BoolLiteralExpression => [],
+        StringLiteralExpression or IntLiteralExpression or DoubleLiteralExpression or CharLiteralExpression or BoolLiteralExpression => [],
         _ => throw new UnreachableException(),
     };
 }

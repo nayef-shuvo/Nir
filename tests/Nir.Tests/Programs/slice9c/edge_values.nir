@@ -1,0 +1,14 @@
+fn main() {
+    let a: byte = 200
+    print(a + 55)
+    let b: sbyte = -100
+    print(b - 28)
+    let c: ushort = 60000
+    print(c + 5535)
+    let d: uint = 4000000000
+    print(d + 294967295)
+    let e: long = -9223372036854775807
+    print(e - 1)
+    let f: ulong = 18446744073709551614
+    print(f + 1)
+}

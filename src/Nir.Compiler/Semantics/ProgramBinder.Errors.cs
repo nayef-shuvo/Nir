@@ -107,10 +107,10 @@ internal sealed partial class ProgramBinder
         _ => BindExpression(expression),
     };
 
-    // A call into .NET can throw, and `try` / `catch` turn that into an `anyerror!T`: the emitter makes the call inside a CLR `try` block
-    // of a helper method, so a protected call can sit anywhere. Anything else is returned unchanged.
+    // A call into .NET, or a conversion with `as`, can throw, and `try` / `catch` turn that into an `anyerror!T`: the emitter makes
+    // the call inside a CLR `try` block of a helper method, so a protected call can sit anywhere. Anything else is returned unchanged.
     private BoundExpression ProtectDotNetCall(BoundExpression operand) =>
-        operand is BoundCallExpression { Target: ClrMethodSymbol } or BoundMemberCallExpression
+        operand is BoundCallExpression { Target: ClrMethodSymbol } or BoundMemberCallExpression or BoundConversion
             ? new BoundProtectedCall(operand, GetResult(AnyErrorTypeSymbol.Instance, operand.Type == TypeSymbol.UnitType ? null : operand.Type))
             : operand;
 

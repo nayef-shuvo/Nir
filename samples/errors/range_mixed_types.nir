@@ -1,0 +1,4 @@
+// Expect: NIR3001 "cannot convert long to int" on line 3.
+fn main() {
+    for i in 0_int..5_long { }
+}

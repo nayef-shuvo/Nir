@@ -1,0 +1,37 @@
+// Every number type, how literals get their type, and converting with `as`. There are no implicit conversions: both sides of an
+// operator must have the same type.
+fn main() {
+    // Integers: signed sbyte, short, int, long; unsigned byte, ushort, uint, ulong.
+    let small: byte = 200                // the annotation gives the literal its type
+    let negative: sbyte = -128
+    let big: ulong = 18446744073709551615
+    let id = 5_long                      // a suffix is the type name after an underscore
+    print($"{small} {negative} {big} {id}")
+
+    // A literal next to a typed value takes that value's type.
+    let next = id + 1                    // 1 is a long here
+    let doubled = small + 50             // 50 is a byte here
+    print($"{next} {doubled}")
+
+    // Fractions: float (32-bit), double (64-bit), decimal (exact, for money).
+    let price: decimal = 19.99
+    let tax = price * 0.25
+    print($"{price} {tax} {price + tax}")
+    print(0.1_decimal + 0.2_decimal == 0.3_decimal)    // True: decimal is exact
+    print(0.1 + 0.2 == 0.3)                             // False: double is not
+    let ratio: float = 2.5
+    print(ratio * 2.0)
+
+    // `as` converts between number types. It always checks: a value that does not fit throws.
+    let count = 300
+    print(count as long)                 // 300
+    print(7.9 as int)                    // 7: the fraction is cut off
+    print(count as byte catch 255)       // 255: 300 does not fit a byte, so the fallback is used
+    let text = count as sbyte catch e => 0
+    print(text)
+
+    // Unsigned numbers compare and divide as unsigned.
+    let huge: uint = 4000000000
+    print(huge / 3)
+    print(huge > 5)
+}

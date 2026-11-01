@@ -1,0 +1,4 @@
+// Expect: NIR3004 "300 is out of range for byte" on line 3.
+fn main() {
+    let small: byte = 300
+}

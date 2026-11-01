@@ -49,11 +49,16 @@ internal sealed partial class ProgramBinder
     private BoundForStatement BindFor(ForStatement statement)
     {
         // The bounds are bound before the loop variable exists, so they cannot refer to it.
-        var start = BindRangeBound(statement.Start);
-        var end = BindRangeBound(statement.End);
+        var start = BindExpression(statement.Start);
+        var end = BindExpression(statement.End);
+        (start, end) = MatchLiteral(start, end);
+
+        // Both bounds are the same integer type or char, and the loop variable has that type.
+        var rangeType = CheckRangeBound(start, statement.Start, TypeSymbol.ErrorType);
+        rangeType = CheckRangeBound(end, statement.End, rangeType);
 
         _scopes.Push();
-        var variable = new VariableSymbol(statement.Variable.Text, TypeSymbol.IntType, isMutable: false);
+        var variable = new VariableSymbol(statement.Variable.Text, rangeType, isMutable: false);
         Declare(variable, statement.Variable);
         var body = BindLoopBody(statement.Body);
         _scopes.Pop();
@@ -61,15 +66,31 @@ internal sealed partial class ProgramBinder
         return new BoundForStatement(variable, start, end, statement.IsInclusive, body);
     }
 
-    private BoundExpression BindRangeBound(Expression expression)
+    // The type of the range so far: the bound's own type if it is an integer or char and agrees with the other bound.
+    private TypeSymbol CheckRangeBound(BoundExpression bound, Expression syntax, TypeSymbol rangeType)
     {
-        var bound = BindExpression(expression);
-        if (bound.Type != TypeSymbol.IntType && bound.Type != TypeSymbol.ErrorType)
+        if (bound.Type == TypeSymbol.ErrorType)
         {
-            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{bound.Type}' to '{TypeNames.IntType}'", expression.Span);
+            return rangeType;
         }
 
-        return bound;
+        if (!NumberTypes.IsCountable(bound.Type))
+        {
+            Error(DiagnosticCodes.TypeMismatch, $"a range runs over integers or '{TypeNames.CharType}', but this is '{bound.Type}'", syntax.Span);
+            return rangeType;
+        }
+
+        if (rangeType == TypeSymbol.ErrorType)
+        {
+            return bound.Type;
+        }
+
+        if (bound.Type != rangeType)
+        {
+            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{bound.Type}' to '{rangeType}'", syntax.Span);
+        }
+
+        return rangeType;
     }
 
     private BoundBlock BindLoopBody(Block body)
@@ -124,7 +145,7 @@ internal sealed partial class ProgramBinder
         }
         else
         {
-            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{expected}'", statement.Value!.Span);
+            Error(DiagnosticCodes.TypeMismatch, ConversionMessage(value, expected), statement.Value!.Span);
         }
 
         return new BoundReturnStatement(value);
@@ -145,7 +166,7 @@ internal sealed partial class ProgramBinder
             }
             else if (type != TypeSymbol.ErrorType && initializer.Type != TypeSymbol.ErrorType)
             {
-                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{initializer.Type}' to '{type}'", declaration.Initializer.Span);
+                Error(DiagnosticCodes.TypeMismatch, ConversionMessage(initializer, type), declaration.Initializer.Span);
             }
         }
         else if (type == TypeSymbol.UnitType)
@@ -210,7 +231,7 @@ internal sealed partial class ProgramBinder
             }
             else
             {
-                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{variable.Type}'", assignment.Value.Span);
+                Error(DiagnosticCodes.TypeMismatch, ConversionMessage(value, variable.Type), assignment.Value.Span);
             }
         }
 
@@ -225,8 +246,18 @@ internal sealed partial class ProgramBinder
 
     private static TypeSymbol? LookupPrimitive(string name) => name switch
     {
+        TypeNames.ByteType => TypeSymbol.ByteType,
+        TypeNames.SByteType => TypeSymbol.SByteType,
+        TypeNames.ShortType => TypeSymbol.ShortType,
+        TypeNames.UShortType => TypeSymbol.UShortType,
         TypeNames.IntType => TypeSymbol.IntType,
+        TypeNames.UIntType => TypeSymbol.UIntType,
+        TypeNames.LongType => TypeSymbol.LongType,
+        TypeNames.ULongType => TypeSymbol.ULongType,
+        TypeNames.FloatType => TypeSymbol.FloatType,
         TypeNames.DoubleType => TypeSymbol.DoubleType,
+        TypeNames.DecimalType => TypeSymbol.DecimalType,
+        TypeNames.CharType => TypeSymbol.CharType,
         TypeNames.BoolType => TypeSymbol.BoolType,
         TypeNames.StringType => TypeSymbol.StringType,
         TypeNames.AnyErrorType => AnyErrorTypeSymbol.Instance,

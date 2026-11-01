@@ -1,0 +1,4 @@
+// Expect: NIR3030 "a character literal must hold exactly one character" on line 3.
+fn main() {
+    let c = 'ab'
+}

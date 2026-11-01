@@ -1,0 +1,7 @@
+fn main() {
+    let a = true as int
+    let b = 'a' as double
+    let c = 1.5 as char
+    let d = "1" as int
+    let e = 1_decimal as char
+}

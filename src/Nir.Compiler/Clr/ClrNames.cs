@@ -7,9 +7,29 @@ internal static class ClrNames
 
     public const string Void = "System.Void";
 
+    public const string Byte = "System.Byte";
+
+    public const string SByte = "System.SByte";
+
+    public const string Int16 = "System.Int16";
+
+    public const string UInt16 = "System.UInt16";
+
     public const string Int32 = "System.Int32";
 
+    public const string UInt32 = "System.UInt32";
+
+    public const string Int64 = "System.Int64";
+
+    public const string UInt64 = "System.UInt64";
+
+    public const string Single = "System.Single";
+
     public const string Double = "System.Double";
+
+    public const string Decimal = "System.Decimal";
+
+    public const string Char = "System.Char";
 
     public const string Boolean = "System.Boolean";
 

@@ -1,0 +1,6 @@
+fn main() {
+    let a: uint = 5
+    let b = -a
+    let c: byte = 1
+    let d = -c
+}

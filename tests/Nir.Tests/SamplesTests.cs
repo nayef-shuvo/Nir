@@ -11,6 +11,9 @@ public partial class SamplesTests
 {
     private static readonly string _samples = Path.Combine(RepositoryRoot.Find(), "samples");
 
+    /// <summary>The user's own scratch file for trying things out. It is not a sample and may not compile.</summary>
+    private const string ScratchFile = "test.nir";
+
     public static TheoryData<string> Programs => Files("*.nir", "apps/*.nir", "crashes/*.nir");
 
     public static TheoryData<string> ErrorPrograms => Files("errors/*.nir");
@@ -48,6 +51,11 @@ public partial class SamplesTests
             var directory = Path.Combine(_samples, Path.GetDirectoryName(pattern) ?? string.Empty);
             foreach (var file in Directory.GetFiles(directory, Path.GetFileName(pattern)).Order(StringComparer.Ordinal))
             {
+                if (Path.GetRelativePath(_samples, file) == ScratchFile)
+                {
+                    continue;
+                }
+
                 data.Add(Path.GetRelativePath(_samples, file));
             }
         }

@@ -15,12 +15,12 @@ internal sealed partial class BodyEmitter
                 il.Emit(OpCodes.Ldstr, s.Value);
                 break;
 
-            case BoundIntLiteral i:
-                il.Emit(OpCodes.Ldc_I4, i.Value);
+            case BoundNumberLiteral number:
+                EmitNumberLiteral(number);
                 break;
 
-            case BoundDoubleLiteral d:
-                il.Emit(OpCodes.Ldc_R8, d.Value);
+            case BoundCharLiteral character:
+                il.Emit(OpCodes.Ldc_I4, character.Value);
                 break;
 
             case BoundBoolLiteral b:
@@ -137,7 +137,7 @@ internal sealed partial class BodyEmitter
                 }
                 else
                 {
-                    EmitBinaryOperator(binary.Operator, isDouble: binary.Left.Type == TypeSymbol.DoubleType);
+                    EmitBinaryOperator(binary.Operator, binary.Left.Type);
                 }
 
                 break;
@@ -148,10 +148,7 @@ internal sealed partial class BodyEmitter
 
             case BoundConversion conversion:
                 EmitExpression(conversion.Operand);
-
-                // int to double is exact. double to int cuts off the fraction and throws when the value does not fit
-                // (or is NaN), like the checked arithmetic (design.md "Strings and conversions").
-                il.Emit(conversion.Target == TypeSymbol.DoubleType ? OpCodes.Conv_R8 : OpCodes.Conv_Ovf_I4);
+                NumberConversions.Emit(il, conversion.Operand.Type, conversion.Target);
                 break;
 
             case BoundMemberCallExpression member:

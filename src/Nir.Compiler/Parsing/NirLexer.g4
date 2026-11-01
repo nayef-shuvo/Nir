@@ -76,8 +76,11 @@ SEMI: ';';
 STRING_START: '"' -> pushMode(PLAIN_STRING);
 INTERP_STRING_START: '$"' -> pushMode(INTERP_STRING);
 
-DOUBLE_LITERAL: DIGIT+ '.' DIGIT+;
-INT_LITERAL: DIGIT+;
+// A number may end in `_` and a number type name (`200_byte`, `2.5_decimal`). Whether the suffix suits the number is the binder's
+// business. A character literal holds anything up to the closing quote; the binder checks that it is exactly one character.
+DOUBLE_LITERAL: DIGIT+ '.' DIGIT+ NUMBER_SUFFIX?;
+INT_LITERAL: DIGIT+ NUMBER_SUFFIX?;
+CHAR_LITERAL: '\'' (ESCAPE | ~['\\\r\n])* '\'';
 
 IDENTIFIER: ID_START ID_CONTINUE*;
 
@@ -85,6 +88,7 @@ WS: [ \t]+ -> skip;
 NEWLINE: ('\r'? '\n')+;
 LINE_COMMENT: '//' ~[\r\n]* -> skip; // Nir has no block comments
 
+fragment NUMBER_SUFFIX: '_' ('sbyte' | 'byte' | 'short' | 'ushort' | 'int' | 'uint' | 'long' | 'ulong' | 'float' | 'double' | 'decimal');
 fragment DIGIT: [0-9];
 fragment ID_START: [a-zA-Z_];
 fragment ID_CONTINUE: [a-zA-Z0-9_];

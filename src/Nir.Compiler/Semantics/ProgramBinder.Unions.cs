@@ -88,12 +88,28 @@ internal sealed partial class ProgramBinder
         return result;
     }
 
-    // The value as the expected type: itself, or, where a union is expected, wrapped as the union. Null if it does not fit.
-    private static BoundExpression? Convert(BoundExpression value, TypeSymbol expected)
+    // The value as the expected type: itself, a literal given that type, or, where a union is expected, the value wrapped as the
+    // union. Null if it does not fit. A literal that is out of range comes back as an error expression (already reported).
+    private BoundExpression? Convert(BoundExpression value, TypeSymbol expected)
     {
-        if (value.Type == expected)
+        if (value.Type == expected && value is not BoundNumberLiteral { Value: null })
         {
             return value;
+        }
+
+        if (CanAdapt(value, expected))
+        {
+            return Adapt((BoundNumberLiteral)value, expected);
+        }
+
+        // A tuple literal written for a tuple type: each element that is a literal takes the type of the element it stands for
+        // (`let p: (char, long) = ('Z', 5)`).
+        if (value is BoundTupleLiteral literal && expected is TupleTypeSymbol wanted && wanted.Elements.Length == literal.Elements.Length &&
+            literal.Elements.Select((element, i) => element.Type == wanted.Elements[i].Type || CanAdapt(element, wanted.Elements[i].Type)).All(fits => fits))
+        {
+            return new BoundTupleLiteral(
+                wanted,
+                [.. literal.Elements.Select((element, i) => element.Type == wanted.Elements[i].Type && element is not BoundNumberLiteral { Value: null } ? element : Adapt((BoundNumberLiteral)element, wanted.Elements[i].Type))]);
         }
 
         // A declared error is an anyerror (and so may be the error of an anyerror!T).
@@ -107,9 +123,16 @@ internal sealed partial class ProgramBinder
             return null;
         }
 
-        if (union.IndexOf(value.Type) is var index and >= 0)
+        if (union.IndexOf(value.Type) is var index and >= 0 && value is not BoundNumberLiteral { Value: null })
         {
             return new BoundUnionWrap(value, union, index);
+        }
+
+        // A literal that is not a member's type can still be the one number member it fits (`return 5` in an `anyerror!long`).
+        if (value is BoundNumberLiteral && union.Members.Where(member => CanAdapt(value, member)).ToList() is [var only])
+        {
+            var adapted = Adapt((BoundNumberLiteral)value, only);
+            return adapted is BoundErrorExpression ? adapted : new BoundUnionWrap(adapted, union, union.IndexOf(only));
         }
 
         return union is ResultTypeSymbol { Error: AnyErrorTypeSymbol } && IsDeclaredError(value.Type)

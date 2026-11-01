@@ -1,0 +1,23 @@
+fn clamp(x: int) -> byte {
+    return x as byte catch e => 255
+}
+
+fn parse_small(text: string) -> anyerror!byte {
+    let n = try Int32::Parse(text)
+    let b = try (n as byte)
+    return b
+}
+
+using clr::cs::System::Int32
+
+fn main() {
+    print(clamp(100))
+    print(clamp(1000))
+    print(clamp(-5))
+    print(parse_small("42") catch 0)
+    print(parse_small("420") catch e => 1)
+    print(parse_small("abc") catch e => 2)
+    print(3000000000_uint as long)
+    print(-1 as sbyte as long)
+    print(300 as byte catch 7)
+}

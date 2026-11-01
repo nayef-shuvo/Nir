@@ -234,6 +234,7 @@ expression
     | interpolatedString                                                # interpolatedStringExpr
     | INT_LITERAL                                                       # intExpr
     | DOUBLE_LITERAL                                                    # doubleExpr
+    | CHAR_LITERAL                                                      # charExpr
     | TRUE                                                              # trueExpr
     | FALSE                                                             # falseExpr
     | SELF                                                              # selfExpr

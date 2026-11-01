@@ -1,0 +1,5 @@
+// Expect: NIR3003 "operator - cannot be applied to uint" on line 4.
+fn main() {
+    let n: uint = 5
+    let m = -n
+}

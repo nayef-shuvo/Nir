@@ -183,7 +183,10 @@ internal sealed partial class ProgramBinder
             }
             else
             {
-                Error(DiagnosticCodes.TypeMismatch, MismatchMessage(argumentType, parameterType), argumentSyntax[i].Span);
+                Error(
+                    DiagnosticCodes.TypeMismatch,
+                    arguments[i] is BoundNumberLiteral ? ConversionMessage(arguments[i], parameterType) : MismatchMessage(argumentType, parameterType),
+                    argumentSyntax[i].Span);
             }
         }
 

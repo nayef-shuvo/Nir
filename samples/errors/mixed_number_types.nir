@@ -1,0 +1,5 @@
+// Expect: NIR3003 "operator + cannot be applied to int and long" on line 4.
+fn main() {
+    let a = 1
+    let b = a + 2_long
+}

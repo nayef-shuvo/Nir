@@ -1,0 +1,6 @@
+fn main() {
+    let a = 2.5_int
+    let b = 5_byte + 1000
+    let c: double = 1
+    let d = -5_uint
+}

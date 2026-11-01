@@ -117,6 +117,7 @@ that is a "decision required" and the user must decide before coding (each slice
 - **Never run two `dotnet build`/`dotnet test` commands at once.** The old repo had a corrupted JRE download because two
   builds overlapped. Also be careful with the 2-minute default timeout on the first build: run it with a longer
   timeout, or in the background, and wait for it to finish.
+- Never interrupt a running build (not with a timeout either): killing it during the JRE download leaves a half-extracted folder.
 - Symptoms of a corrupt `~/.jre` or jar: "Cannot find Java executable", "Could not find or load main class
   org.antlr.v4.Tool". Check for truncated files in `~/.jre` and `~/.m2`, delete the bad one, and rebuild once.
 - Lexer rule order matters: for equal-length matches the earlier rule wins. Keywords go before `IDENTIFIER`.

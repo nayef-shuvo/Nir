@@ -53,8 +53,18 @@ public class ClrUniverseTests
     }
 
     [Theory]
+    [InlineData("System.Byte", "byte")]
+    [InlineData("System.SByte", "sbyte")]
+    [InlineData("System.Int16", "short")]
+    [InlineData("System.UInt16", "ushort")]
     [InlineData("System.Int32", "int")]
+    [InlineData("System.UInt32", "uint")]
+    [InlineData("System.Int64", "long")]
+    [InlineData("System.UInt64", "ulong")]
+    [InlineData("System.Single", "float")]
     [InlineData("System.Double", "double")]
+    [InlineData("System.Decimal", "decimal")]
+    [InlineData("System.Char", "char")]
     [InlineData("System.Boolean", "bool")]
     [InlineData("System.String", "string")]
     [InlineData("System.Void", "()")]
@@ -65,9 +75,8 @@ public class ClrUniverseTests
 
     [Theory]
     [InlineData("System.Object")]
-    [InlineData("System.Int64")]
-    [InlineData("System.Byte")]
     [InlineData("System.IO.File")]
+    [InlineData("System.DateTime")]
     public void Other_clr_types_have_no_nir_type_yet(string fullName)
     {
         Assert.Null(TypeSymbol.FromClr(ClrUniverse.FindType(fullName)!));

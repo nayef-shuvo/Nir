@@ -13,6 +13,9 @@
       "include": "#string"
     },
     {
+      "include": "#character"
+    },
+    {
       "include": "#declarations"
     },
     {
@@ -64,6 +67,10 @@
           "include": "#escape"
         }
       ]
+    },
+    "character": {
+      "name": "string.quoted.single.nir",
+      "match": "'(\\\\.|[^'\\\\\\n])*'"
     },
     "interpolated-string": {
       "name": "string.quoted.double.interpolated.nir",
@@ -331,11 +338,11 @@
       "patterns": [
         {
           "name": "constant.numeric.float.nir",
-          "match": "\\b[0-9]+\\.[0-9]+\\b"
+          "match": "\\b[0-9]+\\.[0-9]+(_(float|double|decimal))?\\b"
         },
         {
           "name": "constant.numeric.integer.nir",
-          "match": "\\b[0-9]+\\b"
+          "match": "\\b[0-9]+(_(sbyte|byte|short|ushort|int|uint|long|ulong|float|double|decimal))?\\b"
         }
       ]
     },
@@ -343,7 +350,7 @@
       "patterns": [
         {
           "name": "support.type.primitive.nir",
-          "match": "\\b(int|double|bool|string|anyerror|any|anytype)\\b"
+          "match": "\\b(sbyte|byte|short|ushort|int|uint|long|ulong|float|double|decimal|char|bool|string|anyerror|any|anytype)\\b"
         },
         {
           "name": "entity.name.type.nir",

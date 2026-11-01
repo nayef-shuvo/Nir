@@ -1,0 +1,12 @@
+fn main() {
+    let big: uint = 4000000000
+    let one: uint = 1
+    print(big > one)
+    print(big / 7)
+    print(big % 7)
+    let huge: ulong = 18446744073709551615
+    print(huge > 1)
+    print(huge / 2)
+    print(huge % 10)
+    print(0 as ulong < huge)
+}

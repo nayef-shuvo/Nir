@@ -1,0 +1,4 @@
+// Expect: NIR3001 "cannot convert int to double" (with a hint) on line 3.
+fn main() {
+    let ratio: double = 1
+}

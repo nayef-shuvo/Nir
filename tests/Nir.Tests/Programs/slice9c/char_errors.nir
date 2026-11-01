@@ -1,0 +1,7 @@
+fn main() {
+    let a = ''
+    let b = 'ab'
+    let c = 'a' + 'b'
+    let d: int = 'a'
+    let e: string = 'a'
+}

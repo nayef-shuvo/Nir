@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Nir.Compiler.Diagnostics;
 
 namespace Nir.Compiler.Semantics;
 
@@ -23,7 +24,7 @@ public sealed record BoundIfStatement(BoundExpression Condition, BoundBlock Then
 
 public sealed record BoundWhileStatement(BoundExpression Condition, BoundBlock Body) : BoundStatement;
 
-/// <summary><c>for</c> over an int range. Start and end are evaluated once, before the first pass.</summary>
+/// <summary><c>for</c> over a range of integers or characters. Start and end are evaluated once, before the first pass.</summary>
 public sealed record BoundForStatement(VariableSymbol Variable, BoundExpression Start, BoundExpression End, bool IsInclusive, BoundBlock Body)
     : BoundStatement;
 
@@ -59,7 +60,7 @@ public sealed record BoundFieldInitializer(FieldSymbol Field, BoundExpression Va
 public sealed record BoundErrorLiteral(StructTypeSymbol Error, ImmutableArray<BoundFieldInitializer> Initializers) : BoundExpression(Error);
 
 /// <summary>
-/// A call into .NET under <c>try</c> or <c>catch</c>: runs <paramref name="Call"/> in a CLR <c>try</c> block. A normal return becomes a
+/// A call into .NET, or an <c>as</c> conversion, under <c>try</c> or <c>catch</c>: runs <paramref name="Call"/> in a CLR <c>try</c> block. A normal return becomes a
 /// success carrying the value; any exception becomes an <c>anyerror</c> whose message is the exception's message.
 /// </summary>
 public sealed record BoundProtectedCall(BoundExpression Call, ResultTypeSymbol Result) : BoundExpression(Result);
@@ -155,12 +156,20 @@ public sealed record BoundUnaryExpression(BoundUnaryOperator Operator, BoundExpr
 /// </summary>
 public sealed record BoundInterpolatedString(ImmutableArray<BoundExpression> Parts) : BoundExpression(TypeSymbol.StringType);
 
-/// <summary>A conversion between <c>int</c> and <c>double</c> (<c>operand as target</c>).</summary>
+/// <summary>A checked conversion between number types, or between <c>char</c> and the integer types (<c>operand as target</c>).</summary>
 public sealed record BoundConversion(BoundExpression Operand, TypeSymbol Target) : BoundExpression(Target);
 
-public sealed record BoundIntLiteral(int Value) : BoundExpression(TypeSymbol.IntType);
+/// <summary>
+/// A number written in the source. <paramref name="Value"/> is a boxed CLR value of the literal's type (<c>byte</c>, <c>long</c>,
+/// <c>decimal</c>, ...), or null while a whole number too big for <c>int</c> waits to be given a wider type by its context
+/// (if none does, the binder reports it). <paramref name="Text"/> is the number as written, with a leading <c>-</c> for a
+/// negative literal and without the suffix, so the literal can be read again as another type. <paramref name="CanAdapt"/> is true
+/// for a literal without a suffix that no context has typed yet.
+/// </summary>
+public sealed record BoundNumberLiteral(object? Value, string Text, TypeSymbol LiteralType, bool CanAdapt, TextSpan Span)
+    : BoundExpression(LiteralType);
 
-public sealed record BoundDoubleLiteral(double Value) : BoundExpression(TypeSymbol.DoubleType);
+public sealed record BoundCharLiteral(char Value) : BoundExpression(TypeSymbol.CharType);
 
 public sealed record BoundBoolLiteral(bool Value) : BoundExpression(TypeSymbol.BoolType);
 

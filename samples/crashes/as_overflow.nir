@@ -1,0 +1,7 @@
+// Compiles. Prints 200, then crashes with System.OverflowException: `as` throws when the value does not fit (use `catch` to handle it).
+fn main() {
+    let a = 200
+    print(a as byte)
+    let b = a + 100
+    print(b as byte)
+}

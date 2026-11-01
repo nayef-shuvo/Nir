@@ -1,0 +1,33 @@
+// `char` is one UTF-16 character, written 'a'. It compares, converts with `as`, and works in ranges, but has no arithmetic.
+fn shift(c: char, by: int) -> char {
+    return ((c as int) + by) as char          // a Caesar shift: go through int and back
+}
+
+fn main() {
+    let letter = 'a'
+    print(letter)
+    print(letter < 'b')                       // True
+    print(letter as int)                      // 97
+    print(65 as char)                         // A
+    print('\n' as int)                        // 10: escapes work as in strings, plus \' and \0
+
+    // A range over chars.
+    let mut alphabet = ""
+    for c in 'a'..='e' {
+        alphabet = alphabet + $"{c}"
+    }
+    print(alphabet)                           // abcde
+
+    // Ranges run over any integer type too; `0..=255_byte` includes the largest byte.
+    let mut sum: long = 0
+    for i in 0..=255_byte {
+        sum = sum + (i as long)
+    }
+    print(sum)                                // 32640
+
+    let mut secret = ""
+    for c in 'h'..='j' {
+        secret = secret + $"{shift(c, 3)}"
+    }
+    print(secret)                             // klm
+}

@@ -69,7 +69,6 @@ internal sealed partial class BodyEmitter
         }
     }
 
-    // Negation of an int is 0 - x so that int.MinValue overflows (throws) like the other checked operations.
     private void EmitUnary(BoundUnaryExpression unary)
     {
         if (unary.Operator == BoundUnaryOperator.Not)
@@ -79,63 +78,7 @@ internal sealed partial class BodyEmitter
             return;
         }
 
-        if (unary.Operand.Type == TypeSymbol.DoubleType)
-        {
-            EmitExpression(unary.Operand);
-            il.Emit(OpCodes.Neg);
-            return;
-        }
-
-        il.Emit(OpCodes.Ldc_I4_0);
-        EmitExpression(unary.Operand);
-        il.Emit(OpCodes.Sub_Ovf);
-    }
-
-    // Integer + - * are checked (design.md, "Numbers"); the "or equal" forms use the unordered compare for double so a NaN
-    // operand makes them false.
-    private void EmitBinaryOperator(BoundBinaryOperator op, bool isDouble)
-    {
-        switch (op)
-        {
-            case BoundBinaryOperator.Add:
-                il.Emit(isDouble ? OpCodes.Add : OpCodes.Add_Ovf);
-                break;
-            case BoundBinaryOperator.Subtract:
-                il.Emit(isDouble ? OpCodes.Sub : OpCodes.Sub_Ovf);
-                break;
-            case BoundBinaryOperator.Multiply:
-                il.Emit(isDouble ? OpCodes.Mul : OpCodes.Mul_Ovf);
-                break;
-            case BoundBinaryOperator.Divide:
-                il.Emit(OpCodes.Div);
-                break;
-            case BoundBinaryOperator.Remainder:
-                il.Emit(OpCodes.Rem);
-                break;
-            case BoundBinaryOperator.Less:
-                il.Emit(OpCodes.Clt);
-                break;
-            case BoundBinaryOperator.Greater:
-                il.Emit(OpCodes.Cgt);
-                break;
-            case BoundBinaryOperator.LessOrEqual:
-                il.Emit(isDouble ? OpCodes.Cgt_Un : OpCodes.Cgt);
-                EmitNot();
-                break;
-            case BoundBinaryOperator.GreaterOrEqual:
-                il.Emit(isDouble ? OpCodes.Clt_Un : OpCodes.Clt);
-                EmitNot();
-                break;
-            case BoundBinaryOperator.Equal:
-                il.Emit(OpCodes.Ceq);
-                break;
-            case BoundBinaryOperator.NotEqual:
-                il.Emit(OpCodes.Ceq);
-                EmitNot();
-                break;
-            default:
-                throw new UnreachableException();
-        }
+        EmitNegate(unary.Operand);
     }
 
     private void EmitNot()

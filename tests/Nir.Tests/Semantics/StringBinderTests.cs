@@ -186,7 +186,7 @@ public class StringBinderTests
     {
         var (program, _, _) = BindMain("print(5 as int)");
 
-        Assert.IsType<BoundIntLiteral>(PrintedArgument(program!));
+        Assert.IsType<BoundNumberLiteral>(PrintedArgument(program!));
     }
 
     [Fact]
