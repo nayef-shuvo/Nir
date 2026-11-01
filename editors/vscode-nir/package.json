@@ -2,9 +2,10 @@
   "name": "nir",
   "displayName": "Nir",
   "description": "Syntax highlighting for the Nir programming language",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "publisher": "nir",
   "license": "UNLICENSED",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -22,7 +23,11 @@
         "extensions": [
           ".nir"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./images/file-icon.svg",
+          "dark": "./images/file-icon.svg"
+        }
       }
     ],
     "grammars": [

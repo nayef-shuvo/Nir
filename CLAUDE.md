@@ -1,16 +1,18 @@
 # Nir
 
 Nir is a modern, minimal language on the .NET CLR: "Kotlin for C#". It compiles to IL and uses C# code and the BCL
-directly. It is also a learning project. Repo: `/mnt/Codes/Project/Nir2`. The previous attempt lives in
-`/mnt/Codes/Project/Nir` (reference only; do not edit it, do not copy from it without reading `docs/practices.md` first).
+directly. It is also a learning project. Repo: `/mnt/Codes/Project/Nir`. The earlier attempts were removed; the last one is kept only as a backup archive
+(`/mnt/Codes/Project/Nir-old-backup.tar.gz`, reference only).
 
 ## Read in this order
 
+0. `docs/handoff.md`: where the last session stopped, how the user likes to work, and the questions to ask next.
 1. `docs/design.md`: the language. Every item is tagged locked / proposed / open.
 2. `docs/architecture.md`: compiler structure, projects, types, pipeline. Follow it exactly.
 3. `docs/practices.md`: coding rules, testing rules, git rules, ANTLR gotchas. Follow it exactly.
 4. `docs/roadmap.md`: slices and tasks. This is where to find the next piece of work.
 5. `docs/decisions.md`: append-only log of why things are the way they are.
+6. `docs/code-map.md`: what every file does and how a feature flows through them.
 
 ## Current status
 
@@ -28,6 +30,8 @@ Update this block whenever a task is completed.
 - Slice 8b (unions and `match`): **done** (1162 tests green).
 - Slice 9a (errors in Nir): **done** (1277 tests green).
 - Slice 9b (`try` / `catch` on .NET calls): **done** (1304 tests green).
+- After 9b: emitter split into partial files, names moved into constants (`Language/`, `Clr/ClrNames`), VS Code highlighting
+  (`editors/vscode-nir/`), the bank demo (`samples/apps/bank.nir`), `SamplesTests`. 1374 tests green.
 - Next: **slice 10 (heap references)**. Ask the user its open design decisions first (design.md sections 3, 4, 6, 7, 12), then
   write the `T10.x` tasks in `docs/roadmap.md`.
 

@@ -3,71 +3,131 @@
   "name": "Nir",
   "scopeName": "source.nir",
   "patterns": [
-    { "include": "#comment" },
-    { "include": "#interpolated-string" },
-    { "include": "#string" },
-    { "include": "#declarations" },
-    { "include": "#keywords" },
-    { "include": "#constants" },
-    { "include": "#numbers" },
-    { "include": "#types" },
-    { "include": "#calls" },
-    { "include": "#members" },
-    { "include": "#operators" }
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#interpolated-string"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#declarations"
+    },
+    {
+      "include": "#match-arm"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#calls"
+    },
+    {
+      "include": "#members"
+    },
+    {
+      "include": "#operators"
+    }
   ],
   "repository": {
     "comment": {
       "name": "comment.line.double-slash.nir",
       "match": "//.*$"
     },
-
     "string": {
       "name": "string.quoted.double.nir",
       "begin": "\"",
       "end": "\"",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.nir" } },
-      "endCaptures": { "0": { "name": "punctuation.definition.string.end.nir" } },
-      "patterns": [{ "include": "#escape" }]
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.nir"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.nir"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
     },
-
     "interpolated-string": {
       "name": "string.quoted.double.interpolated.nir",
       "begin": "\\$\"",
       "end": "\"",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.nir" } },
-      "endCaptures": { "0": { "name": "punctuation.definition.string.end.nir" } },
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.nir"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.nir"
+        }
+      },
       "patterns": [
-        { "include": "#escape" },
+        {
+          "include": "#escape"
+        },
         {
           "name": "constant.character.escape.brace.nir",
           "match": "\\{\\{|\\}\\}"
         },
-        { "include": "#hole" }
+        {
+          "include": "#hole"
+        }
       ]
     },
-
     "hole": {
       "name": "meta.interpolation.nir",
       "begin": "\\{",
       "end": "\\}",
-      "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.nir" } },
-      "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.nir" } },
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.interpolation.begin.nir"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.interpolation.end.nir"
+        }
+      },
       "contentName": "source.nir",
       "patterns": [
-        { "include": "#braces" },
-        { "include": "$self" }
+        {
+          "include": "#braces"
+        },
+        {
+          "include": "$self"
+        }
       ]
     },
-
     "braces": {
       "begin": "\\{",
       "end": "\\}",
       "patterns": [
-        { "include": "#braces" },
-        { "include": "$self" }
+        {
+          "include": "#braces"
+        },
+        {
+          "include": "$self"
+        }
       ]
     },
-
     "escape": {
       "patterns": [
         {
@@ -80,38 +140,158 @@
         }
       ]
     },
-
     "declarations": {
       "patterns": [
         {
-          "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "begin": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\(",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.function.nir"
+            },
+            "2": {
+              "name": "entity.name.function.nir"
+            }
+          },
+          "end": "\\)",
+          "patterns": [
+            {
+              "match": "\\b(self)\\b",
+              "name": "variable.language.self.nir"
+            },
+            {
+              "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=:)",
+              "captures": {
+                "1": {
+                  "name": "variable.parameter.nir"
+                }
+              }
+            },
+            {
+              "include": "#parens"
+            },
+            {
+              "include": "#keywords"
+            },
+            {
+              "include": "#types"
+            },
+            {
+              "include": "#operators"
+            }
+          ]
+        },
+        {
+          "begin": "\\b(type)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(=)\\s*(struct|error)\\s*\\{",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.nir"
+            },
+            "2": {
+              "name": "entity.name.type.nir"
+            },
+            "3": {
+              "name": "keyword.operator.assignment.nir"
+            },
+            "4": {
+              "name": "storage.type.nir"
+            }
+          },
+          "end": "\\}",
+          "patterns": [
+            {
+              "include": "#comment"
+            },
+            {
+              "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=:)",
+              "captures": {
+                "1": {
+                  "name": "variable.other.property.nir"
+                }
+              }
+            },
+            {
+              "include": "#parens"
+            },
+            {
+              "include": "#types"
+            },
+            {
+              "include": "#operators"
+            }
+          ]
+        },
+        {
+          "match": "\\b(let)\\s+(mut\\s+)?([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.function.nir" },
-            "2": { "name": "entity.name.function.nir" }
+            "1": {
+              "name": "storage.type.nir"
+            },
+            "2": {
+              "name": "storage.modifier.nir"
+            },
+            "3": {
+              "name": "variable.other.readwrite.nir"
+            }
+          }
+        },
+        {
+          "match": "\\b(for)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(in)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.control.nir"
+            },
+            "2": {
+              "name": "variable.other.readwrite.nir"
+            },
+            "3": {
+              "name": "keyword.control.nir"
+            }
+          }
+        },
+        {
+          "match": "\\b(catch)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?==>)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.exception.nir"
+            },
+            "2": {
+              "name": "variable.parameter.nir"
+            }
           }
         },
         {
           "match": "\\b(type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.nir" },
-            "2": { "name": "entity.name.type.nir" }
+            "1": {
+              "name": "storage.type.nir"
+            },
+            "2": {
+              "name": "entity.name.type.nir"
+            }
           }
         },
         {
           "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s+(impl)\\b",
           "captures": {
-            "1": { "name": "entity.name.type.nir" },
-            "2": { "name": "storage.type.nir" }
+            "1": {
+              "name": "entity.name.type.nir"
+            },
+            "2": {
+              "name": "storage.type.nir"
+            }
           }
         }
       ]
     },
-
     "keywords": {
       "patterns": [
         {
           "name": "keyword.control.nir",
           "match": "\\b(if|else|while|for|in|break|continue|return|match)\\b"
+        },
+        {
+          "name": "keyword.control.exception.nir",
+          "match": "\\b(try|catch|error)\\b"
         },
         {
           "name": "keyword.control.import.nir",
@@ -126,7 +306,7 @@
           "match": "\\b(mut)\\b"
         },
         {
-          "name": "keyword.operator.word.nir",
+          "name": "keyword.control.as.nir",
           "match": "\\b(as)\\b"
         },
         {
@@ -135,12 +315,18 @@
         }
       ]
     },
-
     "constants": {
-      "name": "constant.language.boolean.nir",
-      "match": "\\b(true|false)\\b"
+      "patterns": [
+        {
+          "name": "constant.language.boolean.nir",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "variable.language.discard.nir",
+          "match": "\\b_\\b"
+        }
+      ]
     },
-
     "numbers": {
       "patterns": [
         {
@@ -153,12 +339,11 @@
         }
       ]
     },
-
     "types": {
       "patterns": [
         {
           "name": "support.type.primitive.nir",
-          "match": "\\b(int|double|bool|string)\\b"
+          "match": "\\b(int|double|bool|string|anyerror|any|anytype)\\b"
         },
         {
           "name": "entity.name.type.nir",
@@ -166,35 +351,60 @@
         }
       ]
     },
-
     "calls": {
       "patterns": [
         {
+          "match": "\\b([a-z_][A-Za-z0-9_]*)(?=\\s*::)",
+          "captures": {
+            "1": {
+              "name": "entity.name.namespace.nir"
+            }
+          }
+        },
+        {
+          "match": "\\b(print)\\b(?=\\s*\\()",
+          "captures": {
+            "1": {
+              "name": "support.function.builtin.nir"
+            }
+          }
+        },
+        {
           "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
-          "captures": { "1": { "name": "entity.name.function.call.nir" } }
+          "captures": {
+            "1": {
+              "name": "entity.name.function.call.nir"
+            }
+          }
         }
       ]
     },
-
     "members": {
       "patterns": [
         {
           "match": "(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
           "captures": {
-            "1": { "name": "punctuation.accessor.nir" },
-            "2": { "name": "entity.name.function.method.nir" }
+            "1": {
+              "name": "punctuation.accessor.nir"
+            },
+            "2": {
+              "name": "entity.name.function.method.nir"
+            }
           }
         },
         {
           "match": "(\\.)([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "punctuation.accessor.nir" },
-            "2": { "name": "variable.other.property.nir" }
+            "1": {
+              "name": "punctuation.accessor.nir"
+            },
+            "2": {
+              "name": "variable.other.property.nir"
+            }
           }
         }
       ]
     },
-
     "operators": {
       "patterns": [
         {
@@ -230,6 +440,26 @@
           "match": "[-+*/%]"
         }
       ]
+    },
+    "parens": {
+      "begin": "\\(",
+      "end": "\\)",
+      "patterns": [
+        {
+          "include": "#parens"
+        },
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "match-arm": {
+      "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=:[^=>]*=>)",
+      "captures": {
+        "1": {
+          "name": "variable.parameter.nir"
+        }
+      }
     }
   }
 }

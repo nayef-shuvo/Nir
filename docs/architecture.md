@@ -28,7 +28,7 @@ driver stops and does not run later phases.
 ## 2. Solution layout
 
 ```
-Nir2/
+Nir/
 ├── Nir.slnx
 ├── global.json, Directory.Build.props, .editorconfig, .gitignore
 ├── CLAUDE.md, README.md

@@ -9,7 +9,7 @@ namespace Nir.Tests;
 /// </summary>
 public partial class SamplesTests
 {
-    private static readonly string _samples = Path.Combine(FindRepositoryRoot(), "samples");
+    private static readonly string _samples = Path.Combine(RepositoryRoot.Find(), "samples");
 
     public static TheoryData<string> Programs => Files("*.nir", "apps/*.nir", "crashes/*.nir");
 
@@ -53,17 +53,6 @@ public partial class SamplesTests
         }
 
         return data;
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Nir.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName ?? throw new InvalidOperationException("Nir.slnx was not found above the test directory.");
     }
 
     [GeneratedRegex(@"NIR\d{4}")]

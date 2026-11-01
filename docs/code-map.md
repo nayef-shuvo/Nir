@@ -144,7 +144,8 @@ Rule: unit tests per phase + end-to-end tests that compile and run real programs
 |---|---|
 | `docs/` | `design.md` (the language), `architecture.md` (the compiler in depth), `practices.md`, `roadmap.md` (slices and tasks), `decisions.md` (every decision, D-001...), this file. |
 | `samples/` | Programs to run by hand; `samples/errors/` shows each kind of error message; `samples/crashes/` shows runtime failures. |
-| `editors/vscode-nir/` | VS Code syntax highlighting (TextMate grammar). |
+| `editors/vscode-nir/` | VS Code syntax highlighting (TextMate grammar); install with a `.vsix`, see its README. |
+| `assets/logo/` | The logo: `nir-mark.svg` (the n made of two halves, the main icon), `nir-mark-stones.svg` (a capital N of stepping stones), `nir-logo.svg` / `nir-logo-dark.svg` (mark + the word), PNG renders, palette in its README. Language colour: salmon `#F5A07E`. SVGs are the source; no font is needed. |
 | `CLAUDE.md` | Entry point and status for work sessions. |
 
 ## 6. Following one feature through the code

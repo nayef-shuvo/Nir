@@ -138,7 +138,7 @@ that is a "decision required" and the user must decide before coding (each slice
 ## 9. What not to do
 
 - Do not build ahead of the roadmap. No "while I am here" features.
-- Do not copy code from the old repo (`/mnt/Codes/Project/Nir`) without reading and understanding it; the only planned
+- Do not copy code from the old repo (now only in `/mnt/Codes/Project/Nir-old-backup.tar.gz`) without reading and understanding it; the only planned
   reuse is `reference/NirLexerBase.cs` logic and the lexer-mode design in `reference/NirLexer.g4`.
 - Do not suppress warnings, use `#pragma warning disable`, or relax `Directory.Build.props`. The single allowed
   exception is the CLI's top-level `catch (Exception)` in `Program.cs` (CA1031), which turns a compiler bug into exit
