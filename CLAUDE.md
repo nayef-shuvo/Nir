@@ -24,8 +24,9 @@ Update this block whenever a task is completed.
 - Slice 5 (control flow): **done** (T5.0 to T5.3, 587 tests green).
 - Slice 6 (strings and conversions): **done** (T6.0 to T6.3, 717 tests green).
 - Slice 7 (structs, methods, borrows): **done** (T7.0 to T7.4, 933 tests green).
-- Next: **slice 8 (tuples, unions, `match`)**. Ask the user its open design decisions first (design.md section 11), then
-  write the `T8.x` tasks in `docs/roadmap.md`.
+- Slice 8a (tuples): **done** (1065 tests green).
+- Next: **slice 8b (unions and `match`)**. Decisions D-064 and D-065 are made; write the `T8b.x` tasks in `docs/roadmap.md`
+  first and wait for the user's go-ahead.
 
 ## How to pick up work
 

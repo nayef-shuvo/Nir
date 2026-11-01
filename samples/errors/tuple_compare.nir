@@ -1,0 +1,5 @@
+// Expect: NIR3003 "operator '==' cannot be applied to '(int, int)' and '(int, int)'" on line 4.
+fn main() {
+    let t = (1, 2)
+    let same = t == t
+}

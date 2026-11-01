@@ -176,7 +176,7 @@ internal sealed partial class ProgramBinder
 
         var typeName = receiver.Type.Name;
 
-        if (receiver.Type == TypeSymbol.UnitType || !ClrMethods.HasMethodNamed(receiver.Type.ClrType, call.Method.Text, isStatic: false))
+        if (receiver.Type == TypeSymbol.UnitType || receiver.Type is TupleTypeSymbol || !ClrMethods.HasMethodNamed(receiver.Type.ClrType, call.Method.Text, isStatic: false))
         {
             Error(DiagnosticCodes.NoSuchMember, $"'{call.Method.Text}' is not a member of '{typeName}'", call.Method.Span);
             return new BoundErrorExpression();

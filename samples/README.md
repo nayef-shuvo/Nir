@@ -23,6 +23,7 @@ src/Nir.Cli/bin/Debug/net10.0/nir run samples/arithmetic.nir
 | `dotnet_math.nir` | `using clr::cs::...`, `Math::Sqrt`, `Int32::Parse`, `Console::WriteLine` |
 | `dotnet_strings.nir` | methods on values: `"text".Trim().ToUpper()`, `42.ToString()` |
 | `structs.nir` | `type P = struct {..}`, `P impl {..}`, `&self` / `&mut self`, `&` / `&mut` arguments, copies, nested structs |
+| `tuples.nir` | tuples `(1, 2)`, `t.0`, named tuples, `type Pair = (x: int, y: int)`, `let (a, b) = t` |
 | `file_io.nir` | writing, reading and deleting a file through `System.IO` |
 
 ## Programs with a compile error (`errors/`)

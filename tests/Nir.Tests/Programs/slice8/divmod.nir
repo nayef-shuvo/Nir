@@ -1,0 +1,10 @@
+fn divmod(a: int, b: int) -> (int, int) {
+    return (a / b, a % b)
+}
+
+fn main() {
+    let (q, r) = divmod(17, 5)
+    print($"{q} remainder {r}")
+    let both = divmod(9, 2)
+    print(both.0 * 10 + both.1)
+}

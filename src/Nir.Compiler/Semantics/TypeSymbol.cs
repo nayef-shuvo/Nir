@@ -54,4 +54,13 @@ public class TypeSymbol
         _clrType ?? throw new InvalidOperationException($"'{Name}' has no CLR type of its own; the emitter maps it.");
 
     public override string ToString() => Name;
+
+    // Types are the same type when they are the same symbol, except tuples, which are the same when their elements are.
+    public override bool Equals(object? obj) => ReferenceEquals(this, obj);
+
+    public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
+
+    public static bool operator ==(TypeSymbol? left, TypeSymbol? right) => left is null ? right is null : left.Equals(right);
+
+    public static bool operator !=(TypeSymbol? left, TypeSymbol? right) => !(left == right);
 }

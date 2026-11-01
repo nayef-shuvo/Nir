@@ -130,13 +130,8 @@ internal sealed partial class ProgramBinder
         var type = initializer.Type;
         if (declaration.DeclaredType is { } annotation)
         {
-            type = LookupType(annotation.Text);
-            if (type is null)
-            {
-                Error(DiagnosticCodes.UnknownType, $"unknown type '{annotation.Text}'", annotation.Span);
-                type = TypeSymbol.ErrorType;
-            }
-            else if (initializer.Type != TypeSymbol.ErrorType && initializer.Type != type)
+            type = ResolveTypeSyntax(annotation);
+            if (type != TypeSymbol.ErrorType && initializer.Type != TypeSymbol.ErrorType && initializer.Type != type)
             {
                 Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{initializer.Type}' to '{type}'", declaration.Initializer.Span);
             }
@@ -204,7 +199,8 @@ internal sealed partial class ProgramBinder
 
     // The built-in types and the structs of this file.
     private TypeSymbol? LookupType(string name) =>
-        LookupPrimitive(name) ?? (name == "Self" ? _selfType : _structs.GetValueOrDefault(name));
+        LookupPrimitive(name) ?? (name == "Self" ? _selfType : _structs.GetValueOrDefault(name)) ??
+        (_aliasDeclarations.ContainsKey(name) ? ResolveAlias(name) : null);
 
     private static TypeSymbol? LookupPrimitive(string name) => name switch
     {

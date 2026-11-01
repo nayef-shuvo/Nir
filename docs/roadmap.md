@@ -946,7 +946,15 @@ the struct-literal-in-condition parse and its parenthesised fix.
 
 ## Later slices (outline; detailed when each starts)
 
-**Slice 8: tuples, unions, `match`.** Tuples as `ValueTuple`; `union { A, B }`; exhaustive `match`. Design section 11.
+**Slice 8a: tuples** (done). Decisions D-062, D-063, D-066; design.md section 2. Anonymous and named tuple types, literals,
+`t.0` / `t.name` access and assignment, `let (a, mut b, _) = t`, `type Pair = (x: int, y: int)`, `ValueTuple` in Emit.
+Tasks: `T8a.0` syntax (types, literals, index, destructuring, alias), `T8a.1` binder (type resolution, equality of types, places),
+`T8a.2` emit (`ValueTuple`, structs inside tuples), `T8a.3` tests (parser, binder, end to end, `Programs/slice8/`), samples, docs.
+All ticked. Any number of elements (nested `ValueTuple.Rest`). Left for later: `==` and printing of tuples, borrows of tuples.
+
+**Slice 8b: unions and `match`.** Decisions D-064, D-065. `type Shape = union { Circle, Square }` over any Nir type, tagged-struct
+Emit, implicit conversion of a member value to the union at assignment, argument and return, `match` as statement and
+expression with exhaustiveness checking. Design section 11. Tasks `T8b.x` are written when this slice starts.
 
 **Slice 9: errors.** `type E = error {...}`, `E!T`, `anyerror`, `error` keyword, `try`, `catch`, `fn main() -> anyerror!`,
 C# exceptions wrapped as `anyerror` under `try`. Design section 10.

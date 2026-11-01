@@ -175,10 +175,12 @@ Codes defined so far (slices 1 to 7; the message text in `DiagnosticCodes` call 
 | NIR2016 | field given twice (in a declaration or a literal) | `field '{name}' is given more than once` |
 | NIR2017 | field missing from a struct literal | `missing field '{name}' in '{struct}'` |
 | NIR2018 | `self` outside a method | `'self' can only be used inside a method` |
+| NIR2019 | tuple type with some elements named and some not | `either every element of a tuple type has a name or none does` |
+| NIR2020 | tuple alias defined in terms of itself | `type '{name}' is defined in terms of itself` |
 | NIR3013 | `&mut self` method called on a temporary | `cannot call '{method}' on a temporary because it changes its receiver` |
 | NIR3014 | borrow anywhere but a direct argument to a Nir function or method | `a borrow can only be passed directly as an argument to a function or method written in Nir` |
 | NIR3015 | borrow of something other than a whole variable | `only a whole variable can be borrowed, not a field or another expression` |
-| NIR3016 | struct inside `{ }` of an interpolated string | `cannot use a value of type '{struct}' in an interpolated string` |
+| NIR3016 | struct or tuple inside `{ }` of an interpolated string | `cannot put a value of type '{type}' in an interpolated string; use its fields` (tuples: `elements`) |
 | NIR3017 | borrow of a non-struct | `cannot borrow a value of type '{type}': only structs can be borrowed for now` |
 
 ## 5. Parsing (`Nir.Compiler.Parsing`)
@@ -438,6 +440,21 @@ places, method and associated calls) and `.Borrows.cs` (borrow parameter types, 
   function or method (`NIR3014` otherwise); the operand must be a whole variable (`NIR3015`) of struct type (`NIR3017`).
   Assigning to a borrow variable itself is `NIR3002` only (no second mismatch error).
 
+### Slice 8a additions: tuples
+
+- Syntax. `TypeSyntax` is the base of every type as written: `TypeReference` (a name, with a borrow marker only for parameters) and
+  `TupleTypeSyntax`. `TupleAliasDeclaration` (`type Pair = (...)`), `TupleLiteralExpression`, `DestructuringDeclaration`. An element
+  access `t.0` is a `FieldAccessExpression` whose field "name" is the digits; the lexer reads `0.1` in `t.0.1` as one decimal
+  literal, so `AstBuilder.AddFieldAccesses` splits it into two accesses with exact spans.
+- `TupleTypeSymbol` has its elements as `FieldSymbol`s (named by their name or their index), so reading, writing and
+  places work exactly as for struct fields (`BoundFieldAccess`, `BoundFieldAssignment`). `TypeSymbol` now overloads `==`:
+  types are equal when they are the same symbol, except tuples, which are equal when their element types are. Use `==`, never
+  `ReferenceEquals`, to compare types.
+- `ProgramBinder.Tuples.cs`: `ResolveTypeSyntax` (the one place that turns a written type into a symbol), alias declaration with
+  on-demand resolution (so aliases and structs may refer to each other in any order, with a cycle check `NIR2020`),
+  `BindTupleLiteral`, `BindDestructuring`. A struct cycle through a tuple is found by `FindCycle` via `StructsInside`.
+- Bound nodes: `BoundTupleLiteral`, `BoundDestructuring(Variables, Initializer, Tuple)` (a `null` variable is a `_`).
+
 ## 8. Emit (`Nir.Compiler.Emit`)
 
 ```csharp
@@ -513,6 +530,19 @@ Emit never reports user errors. If something it cannot emit reaches it, that is 
   is an address), `ldflda` for each field step. Read = address + `ldfld`; write = address, value, `stfld`; borrow argument =
   the address; `BoundDereference` = `ldobj`; a struct literal is a temporary local (`initobj`, then `stfld` per field in
   source order, then `ldloc`); a call result used as a receiver goes through a temporary.
+
+### Slice 8a additions: tuples
+
+- A tuple is `System.ValueTuple<...>` over the CLR types of its elements (`EmitContext.ClrOf`). One `ValueTuple` holds seven;
+  a longer tuple keeps its first seven and puts the rest in a `ValueTuple` of its own in the eighth type argument (`Rest`), and
+  so on, so there is no limit and C# sees the usual type. A literal pushes the elements left to right, building the rest last,
+  and calls the constructor (`newobj`). `EmitContext.FieldPath` gives the CLR fields to follow to an element or struct field
+  (`Item1`..`Item7`, and `Rest` first for the later ones: element 9 is `Rest.Item2`); loads and stores walk the path with
+  `ldflda` and finish with `ldfld` / `stfld`. `BoundDestructuring` stores the tuple in a temporary, then loads each element
+  into its variable's local.
+- When a tuple holds a struct (at any depth) the struct's `TypeBuilder` is a type argument. The load context's generic
+  definition refuses that, so such tuples use the runtime's own `typeof(ValueTuple<,>)` definition, and members come from
+  `TypeBuilder.GetField` / `TypeBuilder.GetConstructor`. Both definitions name the same type in System.Private.CoreLib.
 
 ## 9. Emit findings
 

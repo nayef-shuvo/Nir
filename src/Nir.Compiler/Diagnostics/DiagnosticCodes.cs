@@ -45,6 +45,12 @@ public static class DiagnosticCodes
     /// <summary><c>self</c> or <c>Self</c> used where there is no method or impl.</summary>
     public const string SelfOutsideMethod = "NIR2018";
 
+    /// <summary>A tuple type where some elements have names and others do not, or two have the same name.</summary>
+    public const string InconsistentTupleNames = "NIR2019";
+
+    /// <summary>A type alias that refers to itself.</summary>
+    public const string RecursiveAlias = "NIR2020";
+
     /// <summary>A name declared twice in the same block.</summary>
     public const string AlreadyDeclared = "NIR2005";
 

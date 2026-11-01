@@ -150,7 +150,7 @@ fn main() {
   `int`. `double` to `int` cuts off the fraction toward zero and throws (crashes) when the value does not fit or is `NaN`,
   like the other checked arithmetic. `as` binds tighter than `*` and looser than unary `-`, so `-x as double` is `(-x) as double`.
 
-## 2. Type declarations [struct locked, tuple proposed]
+## 2. Type declarations [struct locked, tuple locked]
 
 One form: `type Name = <shape>`. Struct and tuple use the same form, so `type` vs `const` is gone.
 
@@ -160,7 +160,7 @@ type Point = struct {
     y: int,
 }
 
-type Pair = (x: int, y: int)        // compiles to ValueTuple
+type Pair = (x: int, y: int)        // a name for a tuple type; compiles to ValueTuple
 ```
 
 A struct's fields are separated by a comma or a newline (the last separator is optional), so these are the same:
@@ -185,6 +185,30 @@ available yet; the rule is for later).
 
 Struct values: `==` on structs, `print(p)`, and putting a struct in `{ }` of an interpolated string are errors for now;
 compare or print the fields. The `p with { x = 5 }` copy-and-change form comes later.
+
+### Tuples [locked]
+
+A tuple is two or more values that travel together. It is a value type (`System.ValueTuple`), copied on assignment. There is no
+limit on the number of elements; past seven they are nested through `Rest`, exactly as C# does, so C# sees the same type.
+
+```
+let t = (1, 2.5, "x")               // type (int, double, string)
+print(t.0)                           // elements are reached by index
+let (a, mut b) = (1, 2)              // taking a tuple apart; `_` takes an element and drops it
+fn divmod(a: int, b: int) -> (quotient: int, remainder: int) { return (a / b, a % b) }
+let r = divmod(7, 2)
+print(r.quotient + r.1)              // a named element is reached by name or by index
+```
+
+- A tuple type is written `(T1, T2, ...)`, optionally with a name on every element (`(x: int, y: int)`). All elements named or none.
+  `type Pair = (x: int, y: int)` only gives such a type a name; it is not a new type.
+- Two tuple types are the same type when their element types are the same; names are not part of the type. So `Pair`,
+  `(a: int, b: int)` and `(int, int)` convert to each other freely.
+- Tuples can be parameters, results, `let` annotations and struct fields, and may nest. Only `mut` bindings and `&mut` paths
+  let you assign `t.0 = 5`, like struct fields. A tuple cannot be borrowed yet.
+- A one-element "tuple" does not exist: `(x)` is just `x` in parentheses.
+- `==`, `print(t)` and `{t}` in an interpolated string are errors for now, like for structs; use the elements.
+- A tuple has no methods, and `t.0.1` means element 1 of element 0.
 
 Optional values use a `?` prefix:
 
@@ -562,7 +586,7 @@ Every kind uses the same form: `type X = <shape>`.
 | Soon after | interface, enum |
 | Later | `any`, generics, structural types |
 
-### Tuple
+### Tuple [done, see section 2]
 
 ```
 type Point2D = (x: float, y: float)      // compiles to ValueTuple; names are compile-time only

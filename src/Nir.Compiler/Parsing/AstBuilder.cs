@@ -34,6 +34,12 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
             .Select(BuildStruct)
             .OfType<StructDeclaration>()
             .ToImmutableArray();
+        var aliases = items
+            .Select(item => item.tupleAliasDeclaration())
+            .OfType<NirParser.TupleAliasDeclarationContext>()
+            .Select(BuildTupleAlias)
+            .OfType<TupleAliasDeclaration>()
+            .ToImmutableArray();
         var impls = items
             .Select(item => item.implDeclaration())
             .OfType<NirParser.ImplDeclarationContext>()
@@ -41,7 +47,7 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
             .OfType<ImplDeclaration>()
             .ToImmutableArray();
 
-        return new CompilationUnit(usings, structs, impls, functions, new TextSpan(0, source.Text.Length));
+        return new CompilationUnit(usings, structs, aliases, impls, functions, new TextSpan(0, source.Text.Length));
     }
 
     private static StructDeclaration? BuildStruct(NirParser.StructDeclarationContext context)
@@ -53,12 +59,57 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         }
 
         var fields = (context.fieldList()?.structField() ?? [])
-            .Select(field => (Name: BuildIdentifier(field.name), Type: BuildIdentifier(field.type), Context: field))
+            .Select(field => (Name: BuildIdentifier(field.name), Type: BuildTypeSyntax(field.type), Context: field))
             .Where(f => f.Name is not null && f.Type is not null)
             .Select(f => new FieldDeclaration(f.Name!, f.Type!, SpanOf(f.Context)))
             .ToImmutableArray();
 
         return new StructDeclaration(name, fields, SpanOf(context));
+    }
+
+    private TupleAliasDeclaration? BuildTupleAlias(NirParser.TupleAliasDeclarationContext context)
+    {
+        var name = BuildIdentifier(context.name);
+        var type = BuildTupleType(context.tupleType());
+        return name is null || type is null ? null : new TupleAliasDeclaration(name, type, SpanOf(context));
+    }
+
+    private static TypeSyntax? BuildTypeSyntax(NirParser.TypeSyntaxContext? context)
+    {
+        if (context is null)
+        {
+            return null;
+        }
+
+        if (context.tupleType() is { } tuple)
+        {
+            return BuildTupleType(tuple);
+        }
+
+        var name = BuildIdentifier(context.name);
+        return name is null ? null : new TypeReference(name, BorrowKind.None, SpanOf(context));
+    }
+
+    private static TupleTypeSyntax? BuildTupleType(NirParser.TupleTypeContext? context)
+    {
+        if (context is null)
+        {
+            return null;
+        }
+
+        var elements = ImmutableArray.CreateBuilder<TupleTypeElement>();
+        foreach (var element in context.tupleTypeElement())
+        {
+            var type = BuildTypeSyntax(element.type);
+            if (type is null)
+            {
+                return null;
+            }
+
+            elements.Add(new TupleTypeElement(BuildIdentifier(element.name), type, SpanOf(element)));
+        }
+
+        return new TupleTypeSyntax(elements.ToImmutable(), SpanOf(context));
     }
 
     private ImplDeclaration? BuildImpl(NirParser.ImplDeclarationContext context)
@@ -110,27 +161,36 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
 
         var receiver = context.parameterList()?.receiverParameter() is { } r ? new Receiver(r.MUT() is not null, SpanOf(r)) : null;
 
-        return new FunctionDeclaration(name, receiver, parameters, BuildIdentifier(context.returnType), body, SpanOf(context));
+        return new FunctionDeclaration(name, receiver, parameters, BuildTypeSyntax(context.returnType), body, SpanOf(context));
     }
 
     private static Parameter? BuildParameter(NirParser.ParameterContext context)
     {
         var name = BuildIdentifier(context.name);
-        var type = BuildTypeReference(context.type);
+        var type = BuildParameterType(context.type);
 
         return name is null || type is null ? null : new Parameter(name, type, SpanOf(context));
     }
 
-    private static TypeReference? BuildTypeReference(NirParser.TypeReferenceContext? context)
+    private static TypeSyntax? BuildParameterType(NirParser.ParameterTypeContext? context)
     {
-        var name = context is null ? null : BuildIdentifier(context.name);
-        if (context is null || name is null)
+        if (context is null)
         {
             return null;
         }
 
-        var borrow = context.AMP() is null ? BorrowKind.None : context.MUT() is null ? BorrowKind.Shared : BorrowKind.Mutable;
-        return new TypeReference(name, borrow, SpanOf(context));
+        if (context.typeSyntax() is { } plain)
+        {
+            return BuildTypeSyntax(plain);
+        }
+
+        var name = BuildIdentifier(context.name);
+        if (name is null)
+        {
+            return null;
+        }
+
+        return new TypeReference(name, context.MUT() is null ? BorrowKind.Shared : BorrowKind.Mutable, SpanOf(context));
     }
 
     private Block? BuildBlock(NirParser.BlockContext? context)
@@ -151,6 +211,11 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
 
     private Statement? BuildStatement(NirParser.StatementContext context)
     {
+        if (context.destructuringDeclaration() is { } destructuring)
+        {
+            return BuildDestructuring(destructuring);
+        }
+
         if (context.variableDeclaration() is { } declaration)
         {
             return BuildVariableDeclaration(declaration);
@@ -234,7 +299,24 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
             return null;
         }
 
-        return new VariableDeclaration(name, context.MUT() is not null, BuildIdentifier(context.declaredType), initializer, SpanOf(context));
+        return new VariableDeclaration(name, context.MUT() is not null, BuildTypeSyntax(context.declaredType), initializer, SpanOf(context));
+    }
+
+    private DestructuringDeclaration? BuildDestructuring(NirParser.DestructuringDeclarationContext context)
+    {
+        var initializer = BuildExpression(context.value);
+        var names = ImmutableArray.CreateBuilder<DestructuredName>();
+        foreach (var element in context.destructuredName())
+        {
+            if (BuildIdentifier(element.name) is not { } name)
+            {
+                return null;
+            }
+
+            names.Add(new DestructuredName(name, element.MUT() is not null, SpanOf(element)));
+        }
+
+        return initializer is null ? null : new DestructuringDeclaration(names.ToImmutable(), initializer, SpanOf(context));
     }
 
     private AssignmentStatement? BuildAssignment(NirParser.AssignmentStatementContext context)
@@ -255,7 +337,7 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
 
         var tokens = context.children.OfType<Antlr4.Runtime.Tree.ITerminalNode>()
             .Select(node => node.Symbol)
-            .Where(token => token.Type is NirParser.IDENTIFIER or NirParser.SELF)
+            .Where(token => token.Type is NirParser.IDENTIFIER or NirParser.SELF or NirParser.INT_LITERAL or NirParser.DOUBLE_LITERAL)
             .ToList();
         if (tokens.Count == 0 || IsMissing(tokens[0]))
         {
@@ -274,11 +356,26 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
                 return null;
             }
 
-            var span = new TextSpan(target.Span.Start, token.StopIndex + 1 - target.Span.Start);
-            target = new FieldAccessExpression(target, new Identifier(token.Text, SpanOf(token)), span);
+            target = AddFieldAccesses(target, token);
         }
 
         return target;
+    }
+
+    // `.name` or `.0` after a receiver. The lexer reads `.0.1` as `.` and the number 0.1, so a DOUBLE_LITERAL is two indexes.
+    private static FieldAccessExpression AddFieldAccesses(Expression receiver, IToken token)
+    {
+        var access = (FieldAccessExpression?)null;
+        var start = token.StartIndex;
+        foreach (var part in token.Text.Split('.'))
+        {
+            var span = new TextSpan(receiver.Span.Start, start + part.Length - receiver.Span.Start);
+            access = new FieldAccessExpression(receiver, new Identifier(part, new TextSpan(start, part.Length)), span);
+            receiver = access;
+            start += part.Length + 1;
+        }
+
+        return access!;
     }
 
     private Expression? BuildExpression(NirParser.ExpressionContext? context) => context switch
@@ -286,6 +383,8 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         null => null,
         NirParser.MemberCallExpressionContext m => BuildMemberCall(m),
         NirParser.FieldAccessExpressionContext f => BuildFieldAccess(f),
+        NirParser.TupleIndexExpressionContext t => BuildExpression(t.receiver) is { } receiver && !IsMissing(t.index) ? AddFieldAccesses(receiver, t.index) : null,
+        NirParser.TupleLiteralExprContext t => BuildTupleLiteral(t),
         NirParser.ReferenceExpressionContext r => BuildReference(r),
         NirParser.SelfExprContext s => new SelfExpression(SpanOf(s)),
         NirParser.StructLiteralExprContext l => BuildStructLiteral(l),
@@ -351,6 +450,12 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         var receiver = BuildExpression(context.receiver);
         var field = BuildIdentifier(context.field);
         return receiver is null || field is null ? null : new FieldAccessExpression(receiver, field, SpanOf(context));
+    }
+
+    private TupleLiteralExpression? BuildTupleLiteral(NirParser.TupleLiteralExprContext context)
+    {
+        var elements = context._elements.Select(BuildExpression).ToList();
+        return elements.Any(e => e is null) ? null : new TupleLiteralExpression([.. elements.OfType<Expression>()], SpanOf(context));
     }
 
     private ReferenceExpression? BuildReference(NirParser.ReferenceExpressionContext context)

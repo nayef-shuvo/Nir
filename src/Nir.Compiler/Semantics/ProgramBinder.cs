@@ -23,6 +23,7 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
 
         // Pass 0: the structs, so functions and bodies can use them wherever they are declared.
         DeclareStructs(unit.Structs);
+        DeclareTupleAliases(unit.TupleAliases);
         ResolveStructFields();
 
         // Pass 1: declare every function, so a call may come before the declaration.
@@ -58,7 +59,7 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
     private UserFunctionSymbol DeclareFunction(FunctionDeclaration declaration, StructTypeSymbol? owner = null)
     {
         _selfType = owner; // so `Self` means the owner in the signature
-        var returnType = declaration.ReturnType is { } annotation ? ResolveType(annotation) : TypeSymbol.UnitType;
+        var returnType = declaration.ReturnType is { } annotation ? ResolveTypeSyntax(annotation) : TypeSymbol.UnitType;
         var parameters = declaration.Parameters
             .Select(p => new VariableSymbol(p.Name.Text, ResolveParameterType(p.Type), isMutable: false))
             .ToImmutableArray();
@@ -76,17 +77,6 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
         _selfType = null;
         var receiver = declaration.Receiver is null ? ReceiverKind.None : declaration.Receiver.IsMutable ? ReceiverKind.Mutable : ReceiverKind.Shared;
         return new UserFunctionSymbol(declaration, returnType, parameters, owner, receiver);
-    }
-
-    private TypeSymbol ResolveType(Identifier name)
-    {
-        if (LookupType(name.Text) is { } type)
-        {
-            return type;
-        }
-
-        Error(DiagnosticCodes.UnknownType, $"unknown type '{name.Text}'", name.Span);
-        return TypeSymbol.ErrorType;
     }
 
     // One flat scope per function: the parameters first, then the body's variables. A variable is visible only
@@ -156,6 +146,7 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
     {
         ExpressionStatement s => new BoundExpressionStatement(BindExpression(s.Expression)),
         VariableDeclaration d => BindVariableDeclaration(d),
+        DestructuringDeclaration d => BindDestructuring(d),
         AssignmentStatement a => BindAssignment(a),
         ReturnStatement r => BindReturn(r),
         IfStatement i => BindIf(i),

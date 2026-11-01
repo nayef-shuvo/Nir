@@ -1,0 +1,15 @@
+fn main() {
+    let t = (1, 2.5, true, "hi")
+    print(t.0)
+    print(t.1)
+    print(t.2)
+    print(t.3)
+    let mut m = (10, 20)
+    m.0 = m.0 + 1
+    let copy = m
+    m.1 = 99
+    print(copy.1)
+    print(m.1)
+    m = (7, 8)
+    print(m.0 + m.1)
+}

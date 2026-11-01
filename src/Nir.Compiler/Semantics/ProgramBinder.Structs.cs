@@ -17,23 +17,7 @@ internal sealed partial class ProgramBinder
         foreach (var declaration in declarations)
         {
             var name = declaration.Name.Text;
-            string? problem = null;
-            if (LookupPrimitive(name) is not null)
-            {
-                problem = $"'{name}' is a built-in type and cannot be redefined";
-            }
-            else if (name == "Program")
-            {
-                problem = "'Program' is reserved for the functions of the compiled program";
-            }
-            else if (_structs.ContainsKey(name))
-            {
-                problem = $"type '{name}' is already defined";
-            }
-            else if (_imports.ContainsKey(name))
-            {
-                problem = $"'{name}' is already imported";
-            }
+            var problem = TypeNameProblem(name);
 
             if (problem is not null)
             {
@@ -45,6 +29,27 @@ internal sealed partial class ProgramBinder
             _structs[name] = symbol;
             _structOrder.Add(symbol);
         }
+    }
+
+    // Why a new type may not have this name, or null if it may.
+    private string? TypeNameProblem(string name)
+    {
+        if (LookupPrimitive(name) is not null)
+        {
+            return $"'{name}' is a built-in type and cannot be redefined";
+        }
+
+        if (name == "Program")
+        {
+            return "'Program' is reserved for the functions of the compiled program";
+        }
+
+        if (_structs.ContainsKey(name) || _aliasDeclarations.ContainsKey(name))
+        {
+            return $"type '{name}' is already defined";
+        }
+
+        return _imports.ContainsKey(name) ? $"'{name}' is already imported" : null;
     }
 
     // Pass 1b: the fields, then a check that no struct contains itself.
@@ -62,13 +67,7 @@ internal sealed partial class ProgramBinder
                     continue;
                 }
 
-                var type = LookupType(declaration.Type.Text);
-                if (type is null)
-                {
-                    Error(DiagnosticCodes.UnknownType, $"unknown type '{declaration.Type.Text}'", declaration.Type.Span);
-                    type = TypeSymbol.ErrorType;
-                }
-
+                var type = ResolveTypeSyntax(declaration.Type);
                 fields.Add(new FieldSymbol(declaration.Name.Text, type, symbol, declaration));
             }
 
@@ -89,7 +88,7 @@ internal sealed partial class ProgramBinder
             reported.Add(symbol);
             foreach (var field in cycle)
             {
-                if (field.Type is StructTypeSymbol member)
+                if (field.Owner is StructTypeSymbol member)
                 {
                     reported.Add(member);
                 }
@@ -102,25 +101,31 @@ internal sealed partial class ProgramBinder
     {
         foreach (var field in current.Fields)
         {
-            if (field.Type is not StructTypeSymbol next)
+            foreach (var next in StructsInside(field.Type))
             {
-                continue;
-            }
+                if (next == start)
+                {
+                    return [field];
+                }
 
-            if (next == start)
-            {
-                return [field];
-            }
-
-            if (visited.Add(next) && FindCycle(start, next, visited) is { } rest)
-            {
-                rest.Insert(0, field);
-                return rest;
+                if (visited.Add(next) && FindCycle(start, next, visited) is { } rest)
+                {
+                    rest.Insert(0, field);
+                    return rest;
+                }
             }
         }
 
         return null;
     }
+
+    // The structs a value of this type holds directly: itself, or the ones inside a tuple.
+    private static IEnumerable<StructTypeSymbol> StructsInside(TypeSymbol type) => type switch
+    {
+        StructTypeSymbol structType => [structType],
+        TupleTypeSymbol tuple => tuple.Elements.SelectMany(element => StructsInside(element.Type)),
+        _ => [],
+    };
 
     // A name used as a struct (in a literal): it must be a struct declared in this file.
     private StructTypeSymbol? ResolveStructName(Identifier name)
@@ -130,7 +135,7 @@ internal sealed partial class ProgramBinder
             return symbol;
         }
 
-        if (LookupPrimitive(name.Text) is not null)
+        if (LookupPrimitive(name.Text) is not null || _aliasDeclarations.ContainsKey(name.Text))
         {
             Error(DiagnosticCodes.NotAStruct, $"'{name.Text}' is not a struct", name.Span);
         }
@@ -206,8 +211,9 @@ internal sealed partial class ProgramBinder
         }
 
         // A borrow of a struct is read through, so `self.x` works without writing a dereference.
+        // A tuple element is reached the same way, by index (`t.0`) or, if it has one, by name.
         var owner = StructOf(receiver.Type);
-        var field = owner?.FindField(access.Field.Text);
+        var field = receiver.Type is TupleTypeSymbol tuple ? tuple.FindElement(access.Field.Text) : owner?.FindField(access.Field.Text);
         if (field is null)
         {
             Error(DiagnosticCodes.NoSuchMember, $"'{access.Field.Text}' is not a member of '{owner?.Name ?? receiver.Type.Name}'", access.Field.Span);

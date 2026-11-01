@@ -1,0 +1,5 @@
+// Expect: NIR3002 "cannot assign to 't.0' because 't' is not mutable" on line 4.
+fn main() {
+    let t = (1, 2)
+    t.0 = 5
+}

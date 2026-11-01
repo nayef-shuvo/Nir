@@ -1,0 +1,22 @@
+type Pair = (x: int, y: int)
+
+fn swap(p: Pair) -> Pair {
+    return (p.y, p.x)
+}
+
+fn stats(a: int, b: int) -> (low: int, high: int) {
+    if a < b {
+        return (a, b)
+    }
+    return (b, a)
+}
+
+fn main() {
+    let mut p: Pair = (1, 2)
+    p.x = 5
+    let s = swap(p)
+    print($"{s.x} {s.y}")
+    print(s.0)
+    let r = stats(9, 3)
+    print($"{r.low}..{r.high}")
+}

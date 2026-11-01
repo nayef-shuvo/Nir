@@ -16,7 +16,10 @@ public sealed record StructLiteralExpression(Identifier TypeName, ImmutableArray
 
 public sealed record FieldInitializer(Identifier Name, Expression Value, TextSpan Span) : SyntaxNode(Span);
 
-/// <summary><c>receiver.field</c>.</summary>
+/// <summary><c>(1, 2.5)</c>: two or more values.</summary>
+public sealed record TupleLiteralExpression(ImmutableArray<Expression> Elements, TextSpan Span) : Expression(Span);
+
+/// <summary><c>receiver.field</c>. For a tuple the "field" is an index such as <c>0</c>, or the name of an element.</summary>
 public sealed record FieldAccessExpression(Expression Receiver, Identifier Field, TextSpan Span) : Expression(Span);
 
 /// <summary>The receiver inside a method.</summary>

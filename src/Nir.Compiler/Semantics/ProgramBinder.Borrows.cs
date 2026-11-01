@@ -8,11 +8,11 @@ namespace Nir.Compiler.Semantics;
 internal sealed partial class ProgramBinder
 {
     // A parameter type: a plain type, or a borrow (`&Point`, `&mut Point`), which only a struct can be.
-    private TypeSymbol ResolveParameterType(TypeReference reference)
+    private TypeSymbol ResolveParameterType(TypeSyntax syntax)
     {
-        if (reference.Borrow == BorrowKind.None)
+        if (syntax is not TypeReference { Borrow: not BorrowKind.None } reference)
         {
-            return ResolveType(reference.Name);
+            return ResolveTypeSyntax(syntax);
         }
 
         if (StructNamed(reference.Name) is { } owner)

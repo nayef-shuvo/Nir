@@ -32,13 +32,14 @@ public sealed class StructTypeSymbol : TypeSymbol
         isMutable ? _mutableBorrow ??= new BorrowTypeSymbol(this, true) : _sharedBorrow ??= new BorrowTypeSymbol(this, false);
 }
 
-public sealed class FieldSymbol(string name, TypeSymbol type, StructTypeSymbol owner, FieldDeclaration? declaration = null)
+/// <summary>A field of a struct, or an element of a tuple.</summary>
+public sealed class FieldSymbol(string name, TypeSymbol type, TypeSymbol owner, FieldDeclaration? declaration = null)
 {
     public string Name { get; } = name;
 
     public TypeSymbol Type { get; } = type;
 
-    public StructTypeSymbol Owner { get; } = owner;
+    public TypeSymbol Owner { get; } = owner;
 
     /// <summary>Where the field was declared, for messages about it.</summary>
     public FieldDeclaration? Declaration { get; } = declaration;

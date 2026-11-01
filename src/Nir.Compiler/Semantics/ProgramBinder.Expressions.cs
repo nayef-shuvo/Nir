@@ -23,6 +23,7 @@ internal sealed partial class ProgramBinder
         SelfExpression s => Deref(BindSelf(s)),
         ReferenceExpression r => BindStrayReference(r),
         StructLiteralExpression l => BindStructLiteral(l),
+        TupleLiteralExpression t => BindTupleLiteral(t),
         FieldAccessExpression f => BindFieldAccess(f),
         InterpolatedStringExpression i => BindInterpolated(i),
         CastExpression c => BindCast(c),
@@ -57,11 +58,11 @@ internal sealed partial class ProgramBinder
                         Error(DiagnosticCodes.UnitInInterpolation, "cannot use a value of type '()' in an interpolated string", hole.Expression.Span);
                         failed = true;
                     }
-                    else if (value.Type is StructTypeSymbol)
+                    else if (value.Type is StructTypeSymbol or TupleTypeSymbol)
                     {
                         Error(
                             DiagnosticCodes.StructInInterpolation,
-                            $"cannot put a value of type '{value.Type}' in an interpolated string; use its fields",
+                            $"cannot put a value of type '{value.Type}' in an interpolated string; use its {(value.Type is TupleTypeSymbol ? "elements" : "fields")}",
                             hole.Expression.Span);
                         failed = true;
                     }

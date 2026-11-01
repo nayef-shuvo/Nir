@@ -34,6 +34,9 @@ public sealed record BoundContinueStatement : BoundStatement;
 /// <summary><c>target = value</c> where the target is a field: <c>p.x</c>, <c>line.to.x</c>.</summary>
 public sealed record BoundFieldAssignment(BoundFieldAccess Target, BoundExpression Value) : BoundStatement;
 
+/// <summary><c>let (a, b) = pair</c>: <paramref name="Variables"/> has one entry per element, <c>null</c> for a <c>_</c>.</summary>
+public sealed record BoundDestructuring(ImmutableArray<VariableSymbol?> Variables, BoundExpression Initializer, TupleTypeSymbol Tuple) : BoundStatement;
+
 public sealed record BoundVariableDeclaration(VariableSymbol Variable, BoundExpression Initializer) : BoundStatement;
 
 public sealed record BoundAssignment(VariableSymbol Variable, BoundExpression Value) : BoundStatement;
@@ -51,6 +54,9 @@ public sealed record BoundMemberCallExpression(BoundExpression Receiver, ClrMeth
 public sealed record BoundStructLiteral(StructTypeSymbol Struct, ImmutableArray<BoundFieldInitializer> Initializers) : BoundExpression(Struct);
 
 public sealed record BoundFieldInitializer(FieldSymbol Field, BoundExpression Value);
+
+/// <summary>A tuple value built from its elements, which run left to right.</summary>
+public sealed record BoundTupleLiteral(TupleTypeSymbol Tuple, ImmutableArray<BoundExpression> Elements) : BoundExpression(Tuple);
 
 /// <summary>Reads a field of a struct value, or names a field as an assignment target.</summary>
 public sealed record BoundFieldAccess(BoundExpression Receiver, FieldSymbol Field) : BoundExpression(Field.Type);

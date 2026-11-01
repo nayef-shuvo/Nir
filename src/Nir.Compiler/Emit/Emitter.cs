@@ -185,8 +185,18 @@ public static class Emitter
                 case BoundFieldAssignment fieldAssignment:
                     // The address of the struct that holds the field, then the value, then store.
                     EmitAddress(fieldAssignment.Target.Receiver);
+                    var path = context.FieldPath(fieldAssignment.Target.Field);
+                    foreach (var step in path.Take(path.Count - 1))
+                    {
+                        il.Emit(OpCodes.Ldflda, step);
+                    }
+
                     EmitExpression(fieldAssignment.Value);
-                    il.Emit(OpCodes.Stfld, context.Fields[fieldAssignment.Target.Field]);
+                    il.Emit(OpCodes.Stfld, path[^1]);
+                    break;
+
+                case BoundDestructuring destructuring:
+                    EmitDestructuring(destructuring);
                     break;
 
                 case BoundVariableDeclaration declaration:
@@ -258,18 +268,26 @@ public static class Emitter
                     EmitStructLiteral(structLiteral);
                     break;
 
+                case BoundTupleLiteral tupleLiteral:
+                    EmitTupleLiteral([.. tupleLiteral.Tuple.Elements.Select(element => element.Type)], tupleLiteral.Elements);
+                    break;
+
                 case BoundFieldAccess fieldAccess:
                     // Reading through the address avoids copying the whole struct just to look at one field.
+                    var fieldPath = context.FieldPath(fieldAccess.Field);
                     if (BoundPlaces.IsPlace(fieldAccess.Receiver))
                     {
                         EmitAddress(fieldAccess.Receiver);
+                        EmitFieldLoad(fieldPath);
                     }
                     else
                     {
                         EmitExpression(fieldAccess.Receiver);
+                        foreach (var step in fieldPath)
+                        {
+                            il.Emit(OpCodes.Ldfld, step);
+                        }
                     }
-
-                    il.Emit(OpCodes.Ldfld, context.Fields[fieldAccess.Field]);
                     break;
 
                 case BoundUnaryExpression unary:
@@ -355,7 +373,11 @@ public static class Emitter
 
                 case BoundFieldAccess access:
                     EmitAddress(access.Receiver);
-                    il.Emit(OpCodes.Ldflda, context.Fields[access.Field]);
+                    foreach (var step in context.FieldPath(access.Field))
+                    {
+                        il.Emit(OpCodes.Ldflda, step);
+                    }
+
                     break;
 
                 default:
@@ -364,6 +386,56 @@ public static class Emitter
                     il.Emit(OpCodes.Stloc, temporary);
                     il.Emit(OpCodes.Ldloca, temporary);
                     break;
+            }
+        }
+
+        // With the address of a tuple or struct on the stack: follow the fields to the last one and load its value.
+        private void EmitFieldLoad(IReadOnlyList<FieldInfo> path)
+        {
+            foreach (var step in path.Take(path.Count - 1))
+            {
+                il.Emit(OpCodes.Ldflda, step);
+            }
+
+            il.Emit(OpCodes.Ldfld, path[^1]);
+        }
+
+        // The elements run left to right. A tuple longer than seven ends with the ValueTuple that holds the rest, built last.
+        private void EmitTupleLiteral(IReadOnlyList<TypeSymbol> types, IReadOnlyList<BoundExpression> elements)
+        {
+            const int chunkSize = 7;
+            foreach (var element in elements.Take(chunkSize))
+            {
+                EmitExpression(element);
+            }
+
+            if (elements.Count > chunkSize)
+            {
+                EmitTupleLiteral([.. types.Skip(chunkSize)], [.. elements.Skip(chunkSize)]);
+            }
+
+            il.Emit(OpCodes.Newobj, context.ChunkConstructor(types));
+        }
+
+        // The tuple is stored once, then each name reads its element from the stored copy.
+        private void EmitDestructuring(BoundDestructuring destructuring)
+        {
+            EmitExpression(destructuring.Initializer);
+            var tuple = il.DeclareLocal(context.ClrOf(destructuring.Tuple));
+            il.Emit(OpCodes.Stloc, tuple);
+
+            for (var i = 0; i < destructuring.Variables.Length; i++)
+            {
+                if (destructuring.Variables[i] is not { } variable)
+                {
+                    continue;
+                }
+
+                il.Emit(OpCodes.Ldloca, tuple);
+                EmitFieldLoad(context.FieldPath(destructuring.Tuple.Elements[i]));
+                var local = il.DeclareLocal(context.ClrOf(variable.Type));
+                _locals[variable] = local;
+                il.Emit(OpCodes.Stloc, local);
             }
         }
 

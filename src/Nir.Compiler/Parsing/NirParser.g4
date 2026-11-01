@@ -28,6 +28,7 @@ topLevelItem
     : usingDirective
     | functionDeclaration
     | structDeclaration
+    | tupleAliasDeclaration
     | implDeclaration
     ;
 
@@ -41,7 +42,27 @@ fieldList
     ;
 
 structField
-    : name=IDENTIFIER COLON type=IDENTIFIER
+    : name=IDENTIFIER COLON type=typeSyntax
+    ;
+
+// `type Pair = (x: int, y: int)`: a name for a tuple type.
+tupleAliasDeclaration
+    : TYPE name=IDENTIFIER EQ tupleType
+    ;
+
+// A type is a plain identifier or a tuple type. Which names are types is decided by the binder.
+typeSyntax
+    : tupleType
+    | name=IDENTIFIER
+    ;
+
+// Two or more elements, each optionally named: `(int, double)`, `(x: int, y: int)`.
+tupleType
+    : LPAREN tupleTypeElement (COMMA tupleTypeElement)+ COMMA? RPAREN
+    ;
+
+tupleTypeElement
+    : (name=IDENTIFIER COLON)? type=typeSyntax
     ;
 
 separator
@@ -72,7 +93,7 @@ qualifiedName
     ;
 
 functionDeclaration
-    : FN name=IDENTIFIER LPAREN parameterList? RPAREN (ARROW returnType=IDENTIFIER)? body=block
+    : FN name=IDENTIFIER LPAREN parameterList? RPAREN (ARROW returnType=typeSyntax)? body=block
     ;
 
 // A trailing comma is optional. Types are plain identifiers; which names are types is decided by the binder.
@@ -87,13 +108,13 @@ receiverParameter
     ;
 
 parameter
-    : name=IDENTIFIER COLON type=typeReference
+    : name=IDENTIFIER COLON type=parameterType
     ;
 
 // A parameter may be a borrow: `&Point` or `&mut Point`.
-typeReference
+parameterType
     : AMP MUT? name=IDENTIFIER
-    | name=IDENTIFIER
+    | typeSyntax
     ;
 
 block
@@ -105,7 +126,8 @@ statementList
     ;
 
 statement
-    : variableDeclaration
+    : destructuringDeclaration
+    | variableDeclaration
     | assignmentStatement
     | returnStatement
     | ifStatement
@@ -144,16 +166,26 @@ returnStatement
 
 // A type annotation is a plain identifier; which names are types is decided by the binder.
 variableDeclaration
-    : LET MUT? name=IDENTIFIER (COLON declaredType=IDENTIFIER)? EQ value=expression
+    : LET MUT? name=IDENTIFIER (COLON declaredType=typeSyntax)? EQ value=expression
     ;
 
-// A name, `self`, or a path of fields: `x`, `p.x`, `self.pos.x`.
+// `let (a, mut b) = pair`: each name takes one element of a tuple.
+destructuringDeclaration
+    : LET LPAREN destructuredName (COMMA destructuredName)+ COMMA? RPAREN EQ value=expression
+    ;
+
+destructuredName
+    : MUT? name=IDENTIFIER
+    ;
+
+// A name, `self`, or a path of fields and tuple indexes: `x`, `p.x`, `self.pos.x`, `t.0`, `t.0.1`.
+// (`0.1` is one DOUBLE_LITERAL token; the syntax tree builder splits it.)
 assignmentStatement
     : target=assignmentTarget EQ value=expression
     ;
 
 assignmentTarget
-    : (IDENTIFIER | SELF) (DOT IDENTIFIER)*
+    : (IDENTIFIER | SELF) (DOT (IDENTIFIER | INT_LITERAL | DOUBLE_LITERAL))*
     ;
 
 // Alternatives are listed from highest to lowest precedence (ANTLR's rule for left-recursive rules), and all
@@ -161,6 +193,7 @@ assignmentTarget
 expression
     : receiver=expression DOT method=IDENTIFIER LPAREN argumentList? RPAREN  # memberCallExpression
     | receiver=expression DOT field=IDENTIFIER                          # fieldAccessExpression
+    | receiver=expression DOT index=(INT_LITERAL | DOUBLE_LITERAL)      # tupleIndexExpression
     | op=(MINUS | BANG) operand=expression                              # unaryExpression
     | AMP MUT? operand=expression                                       # referenceExpression
     | operand=expression AS targetType=IDENTIFIER                       # castExpression
@@ -171,6 +204,8 @@ expression
     | left=expression op=AMPAMP right=expression                        # logicalAndExpression
     | left=expression op=PIPEPIPE right=expression                      # logicalOrExpression
     | callExpression                                                    # callExpr
+    | LPAREN {_savedStructLiteralsForbidden.Push(_structLiteralsForbidden); _structLiteralsForbidden = 0;}
+      elements+=expression (COMMA elements+=expression)+ COMMA? {_structLiteralsForbidden = _savedStructLiteralsForbidden.Pop();} RPAREN   # tupleLiteralExpr
     | LPAREN {_savedStructLiteralsForbidden.Push(_structLiteralsForbidden); _structLiteralsForbidden = 0;}
       inner=expression {_structLiteralsForbidden = _savedStructLiteralsForbidden.Pop();} RPAREN   # parenthesizedExpression
     | stringLiteral                                                     # stringExpr

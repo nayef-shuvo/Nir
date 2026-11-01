@@ -1,0 +1,4 @@
+// Expect: NIR3001 "cannot take apart '(int, int)' into 3 names; it has 2 elements" on line 3.
+fn main() {
+    let (a, b, c) = (1, 2)
+}

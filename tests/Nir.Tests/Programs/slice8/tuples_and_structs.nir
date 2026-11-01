@@ -1,0 +1,26 @@
+type P = struct { n: int }
+type Holder = struct {
+    pos: (int, int)
+    who: (P, string)
+}
+
+Holder impl {
+    fn shift(&mut self, by: (int, int)) {
+        self.pos.0 = self.pos.0 + by.0
+        self.pos.1 = self.pos.1 + by.1
+    }
+
+    fn position(&self) -> (int, int) {
+        return self.pos
+    }
+}
+
+fn main() {
+    let mut h = Holder { pos = (1, 1), who = (P { n = 7 }, "seven") }
+    h.shift((2, 3))
+    let (x, y) = h.position()
+    print($"{x},{y}")
+    h.who.0.n = 8
+    print(h.who.0.n)
+    print(h.who.1)
+}

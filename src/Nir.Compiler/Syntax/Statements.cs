@@ -10,8 +10,13 @@ public abstract record Statement(TextSpan Span) : SyntaxNode(Span);
 public sealed record ExpressionStatement(Expression Expression, TextSpan Span) : Statement(Span);
 
 /// <summary><c>let name = value</c>, <c>let mut name = value</c>, optionally with a type annotation.</summary>
-public sealed record VariableDeclaration(Identifier Name, bool IsMutable, Identifier? DeclaredType, Expression Initializer, TextSpan Span)
+public sealed record VariableDeclaration(Identifier Name, bool IsMutable, TypeSyntax? DeclaredType, Expression Initializer, TextSpan Span)
     : Statement(Span);
+
+/// <summary><c>let (a, mut b) = pair</c>: each name takes one element of a tuple.</summary>
+public sealed record DestructuringDeclaration(ImmutableArray<DestructuredName> Names, Expression Initializer, TextSpan Span) : Statement(Span);
+
+public sealed record DestructuredName(Identifier Name, bool IsMutable, TextSpan Span) : SyntaxNode(Span);
 
 /// <summary><c>return</c> or <c>return value</c>. <paramref name="Value"/> is null for a bare return.</summary>
 public sealed record ReturnStatement(Expression? Value, TextSpan Span) : Statement(Span);

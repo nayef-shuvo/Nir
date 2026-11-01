@@ -1,0 +1,9 @@
+fn main() {
+    let (a, b) = (1, 2)
+    let (mut c, _, e) = (3, 4, 5)
+    c = c + a + b + e
+    print(c)
+    let (inner, name) = ((10, 20), "n")
+    let (x, y) = inner
+    print($"{name}: {x + y}")
+}

@@ -6,6 +6,7 @@ namespace Nir.Compiler.Syntax;
 public sealed record CompilationUnit(
     ImmutableArray<UsingDirective> Usings,
     ImmutableArray<StructDeclaration> Structs,
+    ImmutableArray<TupleAliasDeclaration> TupleAliases,
     ImmutableArray<ImplDeclaration> Impls,
     ImmutableArray<FunctionDeclaration> Functions,
     TextSpan Span) : SyntaxNode(Span);
@@ -13,7 +14,10 @@ public sealed record CompilationUnit(
 /// <summary><c>type Name = struct { field: type, ... }</c>.</summary>
 public sealed record StructDeclaration(Identifier Name, ImmutableArray<FieldDeclaration> Fields, TextSpan Span) : SyntaxNode(Span);
 
-public sealed record FieldDeclaration(Identifier Name, Identifier Type, TextSpan Span) : SyntaxNode(Span);
+public sealed record FieldDeclaration(Identifier Name, TypeSyntax Type, TextSpan Span) : SyntaxNode(Span);
+
+/// <summary><c>type Pair = (x: int, y: int)</c>: a name for a tuple type.</summary>
+public sealed record TupleAliasDeclaration(Identifier Name, TupleTypeSyntax Type, TextSpan Span) : SyntaxNode(Span);
 
 /// <summary><c>Name impl { fn ... }</c>: the methods and associated functions of a struct.</summary>
 public sealed record ImplDeclaration(Identifier TypeName, ImmutableArray<FunctionDeclaration> Methods, TextSpan Span) : SyntaxNode(Span);
@@ -32,11 +36,11 @@ public sealed record FunctionDeclaration(
     Identifier Name,
     Receiver? Receiver,
     ImmutableArray<Parameter> Parameters,
-    Identifier? ReturnType,
+    TypeSyntax? ReturnType,
     Block Body,
     TextSpan Span) : SyntaxNode(Span);
 
-public sealed record Parameter(Identifier Name, TypeReference Type, TextSpan Span) : SyntaxNode(Span);
+public sealed record Parameter(Identifier Name, TypeSyntax Type, TextSpan Span) : SyntaxNode(Span);
 
 public enum BorrowKind
 {
@@ -45,9 +49,23 @@ public enum BorrowKind
     Mutable,
 }
 
-/// <summary>A type in a parameter: <c>Point</c>, <c>&amp;Point</c> or <c>&amp;mut Point</c>.</summary>
-public sealed record TypeReference(Identifier Name, BorrowKind Borrow, TextSpan Span) : SyntaxNode(Span)
+/// <summary>A type as written. Which names are types is decided by the binder.</summary>
+public abstract record TypeSyntax(TextSpan Span) : SyntaxNode(Span)
 {
     /// <summary>The type as written, for messages.</summary>
-    public string Text => Borrow switch { BorrowKind.Shared => "&" + Name.Text, BorrowKind.Mutable => "&mut " + Name.Text, _ => Name.Text };
+    public abstract string Text { get; }
 }
+
+/// <summary>A named type: <c>Point</c>, and in a parameter also <c>&amp;Point</c> or <c>&amp;mut Point</c>.</summary>
+public sealed record TypeReference(Identifier Name, BorrowKind Borrow, TextSpan Span) : TypeSyntax(Span)
+{
+    public override string Text => Borrow switch { BorrowKind.Shared => "&" + Name.Text, BorrowKind.Mutable => "&mut " + Name.Text, _ => Name.Text };
+}
+
+/// <summary><c>(int, double)</c> or <c>(x: int, y: int)</c>.</summary>
+public sealed record TupleTypeSyntax(ImmutableArray<TupleTypeElement> Elements, TextSpan Span) : TypeSyntax(Span)
+{
+    public override string Text => "(" + string.Join(", ", Elements.Select(e => e.Name is { } name ? $"{name.Text}: {e.Type.Text}" : e.Type.Text)) + ")";
+}
+
+public sealed record TupleTypeElement(Identifier? Name, TypeSyntax Type, TextSpan Span) : SyntaxNode(Span);
