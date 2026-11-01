@@ -58,6 +58,12 @@ public sealed record BoundFieldInitializer(FieldSymbol Field, BoundExpression Va
 /// <summary><c>error E { ... }</c>: a new error object (a class instance) with its fields set in the order written.</summary>
 public sealed record BoundErrorLiteral(StructTypeSymbol Error, ImmutableArray<BoundFieldInitializer> Initializers) : BoundExpression(Error);
 
+/// <summary>
+/// A call into .NET under <c>try</c> or <c>catch</c>: runs <paramref name="Call"/> in a CLR <c>try</c> block. A normal return becomes a
+/// success carrying the value; any exception becomes an <c>anyerror</c> whose message is the exception's message.
+/// </summary>
+public sealed record BoundProtectedCall(BoundExpression Call, ResultTypeSymbol Result) : BoundExpression(Result);
+
 /// <summary><c>error "text"</c>: a new anyerror with this message.</summary>
 public sealed record BoundErrorMessage(BoundExpression Message) : BoundExpression(AnyErrorTypeSymbol.Instance);
 

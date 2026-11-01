@@ -615,6 +615,12 @@ Emit never reports user errors. If something it cannot emit reaches it, that is 
 - `BoundTry` stores the operand, tests the tag, and on an error returns (a widened copy when the function's error type differs) with
   `ret`; on a success it loads `Case1`. `BoundCatch` stores the operand and runs the handler on an error, with the result in a local
   so the stack is the same on every path. A function returning `E!` that falls off the end succeeds (`EmitUnitSuccess`).
+- **.NET calls under `try` / `catch` (slice 9b).** The binder wraps the bound call in `BoundProtectedCall` typed `anyerror!T` (`T` is the
+  method's return type, or no value for `void`), so `BindTry` and `BindCatch` need no other change. Emit does not open a CLR `try` block
+  at the call site (it needs an empty stack, and the call can be inside an expression): it pushes the receiver and arguments, then calls a
+  generated static helper `Protected<n>` on `Program` (one per .NET method, cached in `EmitContext.ProtectedHelpers`) that makes the
+  call inside a `try` block, stores the value and the success tag, and in `catch (System.Exception)` stores a new `Nir.AnyError` whose
+  `Message` is `ex.Message`. So only the call is protected, not the evaluation of its arguments.
 - A `main` returning `E!` gets a generated entry `Main` returning `int`: it calls the user's `main`, prints `error: <message>` to
   `Console.Error` for an error and returns 1, otherwise 0. Other entry points are unchanged.
 

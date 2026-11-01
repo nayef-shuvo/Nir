@@ -1,0 +1,8 @@
+using clr::cs::System::IO
+
+fn main() {
+    let text = IO::File::ReadAllText("/definitely/not/here.txt") catch e => "nothing"
+    print(text)
+    IO::File::Delete("/definitely/not/here.txt") catch e => print("could not delete")
+    IO::Directory::Delete("/definitely/not/here") catch e => print("could not delete directory")
+}

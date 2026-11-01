@@ -107,9 +107,16 @@ internal sealed partial class ProgramBinder
         _ => BindExpression(expression),
     };
 
+    // A call into .NET can throw, and `try` / `catch` turn that into an `anyerror!T`: the emitter makes the call inside a CLR `try` block
+    // of a helper method, so a protected call can sit anywhere. Anything else is returned unchanged.
+    private BoundExpression ProtectDotNetCall(BoundExpression operand) =>
+        operand is BoundCallExpression { Target: ClrMethodSymbol } or BoundMemberCallExpression
+            ? new BoundProtectedCall(operand, GetResult(AnyErrorTypeSymbol.Instance, operand.Type == TypeSymbol.UnitType ? null : operand.Type))
+            : operand;
+
     private BoundExpression BindTry(TryExpression tryExpression, bool wholeStatementValue)
     {
-        var operand = BindExpression(tryExpression.Operand);
+        var operand = ProtectDotNetCall(BindExpression(tryExpression.Operand));
         if (!wholeStatementValue)
         {
             Error(DiagnosticCodes.TryPosition, "'try' can only be the whole value of a 'let', an assignment to a variable, a 'return' or a statement", tryExpression.Span);
@@ -158,9 +165,10 @@ internal sealed partial class ProgramBinder
     // there is no value to produce.
     private BoundExpression BindCatch(CatchExpression catchExpression, bool wholeStatementValue)
     {
-        var operand = BindExpression(catchExpression.Operand);
+        var operand = ProtectDotNetCall(BindExpression(catchExpression.Operand));
         var result = operand.Type as ResultTypeSymbol;
         var failed = operand.Type == TypeSymbol.ErrorType;
+
         if (result is null && !failed)
         {
             Error(DiagnosticCodes.NotAResult, $"'catch' needs a value of an 'E!T' type, but this is '{operand.Type}'", catchExpression.Operand.Span);

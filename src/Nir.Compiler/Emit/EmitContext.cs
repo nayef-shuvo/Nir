@@ -17,6 +17,12 @@ internal sealed class EmitContext
 
     public Dictionary<UnionTypeSymbol, UnionLayout> Unions { get; } = [];
 
+    /// <summary>The class that holds the functions; generated helper methods go here too.</summary>
+    public TypeBuilder Host { get; set; } = null!;
+
+    /// <summary>The helper that runs one .NET method inside a CLR try block (see <c>BoundProtectedCall</c>), made on first use.</summary>
+    public Dictionary<MethodInfo, MethodBuilder> ProtectedHelpers { get; } = [];
+
     /// <summary>The class every error derives from (<c>anyerror</c>), defined once per program.</summary>
     public TypeBuilder AnyError { get; set; } = null!;
 

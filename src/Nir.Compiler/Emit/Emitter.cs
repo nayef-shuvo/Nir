@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -26,7 +27,7 @@ public static class Emitter
         // Temporary naming: one class holding every function. Changes when modules arrive (slice 11).
         var type = module.DefineType("Program", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
 
-        var context = new EmitContext();
+        var context = new EmitContext { Host = type };
         DefineAnyError(module, context);
         DefineStructTypes(program, module, context);
         DefineUnionTypes(program, module, context);
@@ -389,6 +390,10 @@ public static class Emitter
                     EmitErrorLiteral(errorLiteral);
                     break;
 
+                case BoundProtectedCall protectedCall:
+                    EmitProtectedCall(protectedCall);
+                    break;
+
                 case BoundErrorMessage errorMessage:
                     il.Emit(OpCodes.Newobj, context.AnyErrorConstructor);
                     il.Emit(OpCodes.Dup);
@@ -548,13 +553,18 @@ public static class Emitter
             var layout = context.Unions[wrap.Union];
             var temporary = il.DeclareLocal(layout.Type);
 
+            // The value is worked out first and kept in a local: it may be a `try`, which returns early, and that needs an empty stack.
+            EmitExpression(wrap.Value);
+            var value = il.DeclareLocal(context.ClrOf(wrap.Value.Type));
+            il.Emit(OpCodes.Stloc, value);
+
             il.Emit(OpCodes.Ldloca, temporary);
             il.Emit(OpCodes.Initobj, layout.Type);
             il.Emit(OpCodes.Ldloca, temporary);
             il.Emit(OpCodes.Ldc_I4, wrap.Index);
             il.Emit(OpCodes.Stfld, layout.Tag);
             il.Emit(OpCodes.Ldloca, temporary);
-            EmitExpression(wrap.Value);
+            il.Emit(OpCodes.Ldloc, value);
             il.Emit(OpCodes.Stfld, layout.Cases[wrap.Index]);
             il.Emit(OpCodes.Ldloc, temporary);
         }
@@ -586,6 +596,128 @@ public static class Emitter
 
             il.Emit(OpCodes.Stfld, context.AnyErrorMessage);
             il.Emit(OpCodes.Ldloc, error);
+        }
+
+        // The operands of the .NET call are worked out here, where an exception is not caught, and passed to a generated helper that
+        // makes the call inside a CLR try block. The block cannot be entered with something on the stack, and here there may be, so
+        // the try block lives in a method of its own.
+        private void EmitProtectedCall(BoundProtectedCall protectedCall)
+        {
+            ClrMethodSymbol target;
+            BoundExpression? receiver = null;
+            ImmutableArray<BoundExpression> arguments;
+            switch (protectedCall.Call)
+            {
+                case BoundCallExpression { Target: ClrMethodSymbol staticTarget } call:
+                    target = staticTarget;
+                    arguments = call.Arguments;
+                    break;
+                case BoundMemberCallExpression member:
+                    target = member.Target;
+                    receiver = member.Receiver;
+                    arguments = member.Arguments;
+                    break;
+                default:
+                    throw new UnreachableException();
+            }
+
+            if (receiver is not null)
+            {
+                EmitExpression(receiver);
+            }
+
+            foreach (var argument in arguments)
+            {
+                EmitExpression(argument);
+            }
+
+            il.Emit(OpCodes.Call, ProtectedHelper(target.Method, protectedCall.Result, receiver?.Type, [.. arguments.Select(a => a.Type)]));
+        }
+
+        private MethodBuilder ProtectedHelper(MethodInfo method, ResultTypeSymbol result, TypeSymbol? receiverType, TypeSymbol[] argumentTypes)
+        {
+            if (context.ProtectedHelpers.TryGetValue(method, out var existing))
+            {
+                return existing;
+            }
+
+            var layout = context.Unions[result];
+            var parameters = (receiverType is null ? argumentTypes : [receiverType, .. argumentTypes]).Select(context.ClrOf).ToArray();
+            var helper = context.Host.DefineMethod(
+                "Protected" + context.ProtectedHelpers.Count,
+                MethodAttributes.Private | MethodAttributes.Static,
+                layout.Type,
+                parameters);
+            context.ProtectedHelpers[method] = helper;
+
+            var il = helper.GetILGenerator();
+            var outcome = il.DeclareLocal(layout.Type);
+            il.Emit(OpCodes.Ldloca, outcome);
+            il.Emit(OpCodes.Initobj, layout.Type);
+
+            il.BeginExceptionBlock();
+            var useCall = false;
+            if (receiverType is not null)
+            {
+                il.Emit(OpCodes.Ldarg_0);
+
+                // The same receiver handling as an unprotected call (EmitMemberCall).
+                var receiverClrType = receiverType.ClrType;
+                if (receiverClrType.IsValueType)
+                {
+                    if (method.DeclaringType is { IsValueType: true })
+                    {
+                        var temporary = il.DeclareLocal(receiverClrType);
+                        il.Emit(OpCodes.Stloc, temporary);
+                        il.Emit(OpCodes.Ldloca, temporary);
+                        useCall = true;
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Box, receiverClrType);
+                    }
+                }
+            }
+
+            for (var i = receiverType is null ? 0 : 1; i < parameters.Length; i++)
+            {
+                il.Emit(OpCodes.Ldarg, (short)i);
+            }
+
+            il.Emit(receiverType is null || useCall ? OpCodes.Call : OpCodes.Callvirt, method);
+            if (result.Success is { } valueType)
+            {
+                var value = il.DeclareLocal(context.ClrOf(valueType));
+                il.Emit(OpCodes.Stloc, value);
+                il.Emit(OpCodes.Ldloca, outcome);
+                il.Emit(OpCodes.Ldloc, value);
+                il.Emit(OpCodes.Stfld, layout.Cases[ResultTypeSymbol.SuccessTag]);
+            }
+
+            il.Emit(OpCodes.Ldloca, outcome);
+            il.Emit(OpCodes.Ldc_I4, ResultTypeSymbol.SuccessTag);
+            il.Emit(OpCodes.Stfld, layout.Tag);
+
+            // Any exception becomes an anyerror carrying the exception's message.
+            var exception = ClrUniverse.CoreType("System.Exception");
+            il.BeginCatchBlock(exception);
+            var message = il.DeclareLocal(ClrUniverse.CoreType("System.String"));
+            il.Emit(OpCodes.Callvirt, exception.GetProperty("Message")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, message);
+            il.Emit(OpCodes.Newobj, context.AnyErrorConstructor);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldloc, message);
+            il.Emit(OpCodes.Stfld, context.AnyErrorMessage);
+            var error = il.DeclareLocal(context.AnyError);
+            il.Emit(OpCodes.Stloc, error);
+            il.Emit(OpCodes.Ldloca, outcome);
+            il.Emit(OpCodes.Ldloc, error);
+            il.Emit(OpCodes.Stfld, layout.Cases[0]);
+            il.EndExceptionBlock();
+
+            il.Emit(OpCodes.Ldloc, outcome);
+            il.Emit(OpCodes.Ret);
+            return helper;
         }
 
         // A zeroed result has tag 0, the error; success is tag 1.

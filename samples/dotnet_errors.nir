@@ -1,0 +1,35 @@
+// A .NET call can throw. `try` and `catch` turn a thrown exception into an `anyerror` (its `message` is the exception's message).
+// Without them an exception still crashes the program (see samples/crashes/).
+using clr::cs::System::Int32
+using clr::cs::System::IO
+
+fn parse_port(text: string) -> anyerror!int {
+    let port = try Int32::Parse(text)
+    if port < 1 || port > 65535 {
+        return error $"port {port} is out of range"
+    }
+    return port
+}
+
+fn report(label: string, result: anyerror!int) {
+    match result {
+        n: int => print($"{label}: {n}")
+        e: anyerror => print($"{label} failed: {e.message}")
+    }
+}
+
+fn main() -> anyerror! {
+    print(Int32::Parse("8080") catch 80)
+    print(Int32::Parse("not a number") catch 80)
+
+    let config = IO::File::ReadAllText("/no/such/config.txt") catch e => "port=80"
+    print(config)
+
+    print(parse_port("8080") catch 0)
+    report("99999", parse_port("99999"))
+    report("http", parse_port("http"))
+
+    // An error that escapes main is printed and the exit code is 1.
+    let port = try parse_port("0")
+    print(port)
+}

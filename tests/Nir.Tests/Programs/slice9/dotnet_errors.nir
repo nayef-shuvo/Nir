@@ -1,0 +1,21 @@
+using clr::cs::System::Int32
+using clr::cs::System::IO
+
+fn parse(text: string) -> anyerror!int {
+    let n = try Int32::Parse(text)
+    return n * 2
+}
+
+fn read(path: string) -> anyerror!string {
+    return try IO::File::ReadAllText(path)
+}
+
+fn main() {
+    print(Int32::Parse("12") catch -1)
+    print(Int32::Parse("twelve") catch -1)
+    print(parse("21") catch 0)
+    parse("abc") catch e => {
+        print(e.message.Contains("abc"))
+        return
+    }
+}

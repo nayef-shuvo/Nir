@@ -496,7 +496,7 @@ let same = Enumerable::Sum(nums)         // the full path always works, no impor
 calling `IO.File.ReadAllText` internally. In v1, `std` is only a small prelude [proposed] (`print` and a few basics).
 Everything else comes from `clr::cs`.
 
-## 10. Error handling [slice 9a done, C# interop (9b) planned]
+## 10. Error handling [done: Nir errors (9a) and .NET calls (9b)]
 
 Errors are values, not exceptions. `E!T` means "either an error of type `E`, or a `T`".
 The error type must always be written. `anyerror` is the catch-all.
@@ -592,7 +592,13 @@ Unrecoverable failures (index out of range, null dereference) are not errors. Th
   statement.
 - `a catch value` gives a fallback; `a catch e => expr` computes one from the error; `a catch e => { ... }` must return on every path when
   there is a value to produce (for `E!` it need not). `catch` has the lowest precedence.
-- The C# side, `try` on .NET calls, `e.exception`, `impl` on errors and `==` on errors are not done yet.
+- **.NET calls (slice 9b).** `try` and `catch` also take a call into .NET: `let text = try IO::File::ReadAllText(path)`,
+  `Int32::Parse(s) catch 0`, `IO::Directory::Delete(p) catch e => print("failed")`. A thrown exception becomes an `anyerror` whose `message` is the
+  exception's message (nothing else is exposed until .NET objects can be used); a method with no value becomes an `E!`. Only the call itself
+  is protected, not the evaluation of its arguments. A call without `try` / `catch` that throws crashes the program as before.
+  `try` follows the statement-level rule above; `catch` with a fallback or a handler expression can sit anywhere, because the protected
+  call is made by a generated helper method.
+- Not done: `e.exception`, `impl` on errors, `==` on errors, `try` anywhere inside an expression.
 
 
 ## 11. The kinds of types [union and match done, rest planned]

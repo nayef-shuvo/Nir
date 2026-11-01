@@ -1042,8 +1042,10 @@ Tasks:
 Left for 9b and later: `try` on .NET calls (exceptions become `anyerror`, `e.exception`), `impl` on error types, `try` anywhere inside an
 expression (needs stack spilling), `==` on errors, converting `E!T` to `anyerror!T` without `try`.
 
-**Slice 9b: C# interop for errors.** `try` / `catch` on calls into .NET: a thrown exception becomes an `anyerror` that wraps it (`e.message`,
-`e.exception`); a call without `try` that throws still crashes. Tasks are written when this slice starts.
+**Slice 9b: C# interop for errors** (done). Decisions D-080, D-081. `try` / `catch` on calls into .NET: a thrown exception becomes an `anyerror`
+with the exception's `message`; a call without `try` that throws still crashes. `e.exception` waits for slice 12. Tasks: the binder wraps the
+call in `BoundProtectedCall` (`T9b.0`), Emit makes the call in a generated helper with a CLR try block (`T9b.1`), tests, golden programs
+and `samples/dotnet_errors.nir` (`T9b.2`). All done.
 
 **Slice 10: heap references.** `&T`, `&mut T`, `&T {...}`, `&` of a variable (hoisted to a `Ref<T>`), `?T`, null. Design
 sections 3, 4, 6, 7.

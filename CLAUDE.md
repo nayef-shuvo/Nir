@@ -27,8 +27,9 @@ Update this block whenever a task is completed.
 - Slice 8a (tuples): **done** (1065 tests green).
 - Slice 8b (unions and `match`): **done** (1162 tests green).
 - Slice 9a (errors in Nir): **done** (1277 tests green).
-- Next: **slice 9b (C# interop for errors)**: `try` / `catch` on .NET calls. Ask the user its open decisions first, then write the
-  `T9b.x` tasks in `docs/roadmap.md`.
+- Slice 9b (`try` / `catch` on .NET calls): **done** (1304 tests green).
+- Next: **slice 10 (heap references)**. Ask the user its open design decisions first (design.md sections 3, 4, 6, 7, 12), then
+  write the `T10.x` tasks in `docs/roadmap.md`.
 
 ## How to pick up work
 
