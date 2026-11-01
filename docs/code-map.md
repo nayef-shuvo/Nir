@@ -134,6 +134,7 @@ Rule: unit tests per phase + end-to-end tests that compile and run real programs
 | `Emit/` | End-to-end: compile with `TestHost.Run`, run `dotnet`, compare output. One file per feature. |
 | `Programs/sliceN/` | Golden programs: `name.nir` + `name.stdout` (must run and print that) or `name.diag` (must fail with these `line:col CODE`s). Add a program = add two files, no C#. |
 | `Cli/`, `Clr/`, `Diagnostics/` | Printer, argument parsing, the CLR universe, source text. |
+| `SamplesTests.cs` | Every file in `samples/` is checked: programs and apps compile, `errors/` samples fail (with the code their first line names), `crashes/` samples compile. |
 | `ArchitectureTests.cs` | Enforces the dependency rules (ANTLR only in `Parsing`; Emit does not use Syntax; ...). |
 | `Support/` | `TestHost`, `ProcessRunner`, `TokenFormatter`, `AstFormatter`, `BinderHarness` (the shared `Bind` helper of the binder tests). |
 

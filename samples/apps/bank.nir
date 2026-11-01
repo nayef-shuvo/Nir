@@ -1,0 +1,222 @@
+// A tiny bank in the terminal. Run it and type commands:
+//
+//   nir run samples/apps/bank.nir
+//
+//   > show
+//   > deposit alice 50
+//   > withdraw bob 500        (an error: not enough money)
+//   > transfer alice carol 30
+//   > help
+//   > quit
+//
+// It uses most of Nir: structs with methods, borrows, unions with `match`, errors with `try` / `catch`, and the .NET library
+// (reading the terminal, parsing numbers).
+
+using clr::cs::System::{Console, Int32, String}
+
+// ---- errors ----------------------------------------------------------------------------------------------------------------
+
+type InsufficientFunds = error { message: string, needed: int, available: int }
+type UnknownAccount = error { message: string, name: string }
+type BadInput = error { message: string }
+
+// ---- accounts --------------------------------------------------------------------------------------------------------------
+
+type Account = struct { balance: int }
+
+Account impl {
+    fn deposit(&mut self, amount: int) {
+        self.balance = self.balance + amount
+    }
+
+    fn withdraw(&mut self, amount: int) -> InsufficientFunds! {
+        if amount > self.balance {
+            return error InsufficientFunds {
+                message = $"needs {amount} but only {self.balance} is available",
+                needed = amount,
+                available = self.balance,
+            }
+        }
+        self.balance = self.balance - amount
+    }
+}
+
+type Bank = struct {
+    alice: Account
+    bob: Account
+    carol: Account
+}
+
+Bank impl {
+    fn new() -> Self {
+        return Self {
+            alice = Account { balance = 100 },
+            bob = Account { balance = 50 },
+            carol = Account { balance = 0 },
+        }
+    }
+
+    fn balance_of(&self, who: string) -> UnknownAccount!int {
+        if who == "alice" {
+            return self.alice.balance
+        }
+        if who == "bob" {
+            return self.bob.balance
+        }
+        if who == "carol" {
+            return self.carol.balance
+        }
+        return error UnknownAccount { message = $"there is no account called '{who}'", name = who }
+    }
+
+    fn deposit(&mut self, who: string, amount: int) -> anyerror! {
+        if who == "alice" {
+            self.alice.deposit(amount)
+        } else if who == "bob" {
+            self.bob.deposit(amount)
+        } else if who == "carol" {
+            self.carol.deposit(amount)
+        } else {
+            return error UnknownAccount { message = $"there is no account called '{who}'", name = who }
+        }
+    }
+
+    fn withdraw(&mut self, who: string, amount: int) -> anyerror! {
+        if who == "alice" {
+            try self.alice.withdraw(amount)
+        } else if who == "bob" {
+            try self.bob.withdraw(amount)
+        } else if who == "carol" {
+            try self.carol.withdraw(amount)
+        } else {
+            return error UnknownAccount { message = $"there is no account called '{who}'", name = who }
+        }
+    }
+
+    // Both accounts must exist and the money must be there before anything moves.
+    fn transfer(&mut self, from: string, to: string, amount: int) -> anyerror! {
+        try self.balance_of(from)
+        try self.balance_of(to)
+        try self.withdraw(from, amount)
+        try self.deposit(to, amount)
+    }
+}
+
+// ---- commands --------------------------------------------------------------------------------------------------------------
+
+type Show = struct { }
+type Help = struct { }
+type Deposit = struct { who: string, amount: int }
+type Withdraw = struct { who: string, amount: int }
+type Transfer = struct { from: string, to: string, amount: int }
+
+type Command = union { Show, Help, Deposit, Withdraw, Transfer }
+
+// "deposit alice 50" -> "deposit"
+fn first_word(text: string) -> string {
+    let space = text.IndexOf(" ")
+    if space < 0 {
+        return text
+    }
+    return text.Substring(0, space)
+}
+
+// "deposit alice 50" -> "alice 50"
+fn after_first_word(text: string) -> string {
+    let space = text.IndexOf(" ")
+    if space < 0 {
+        return ""
+    }
+    return text.Substring(space + 1).Trim()
+}
+
+fn parse_amount(text: string) -> BadInput!int {
+    let amount = Int32::Parse(text) catch e => {
+        return error BadInput { message = $"'{text}' is not a number" }
+    }
+    if amount <= 0 {
+        return error BadInput { message = "the amount must be more than zero" }
+    }
+    return amount
+}
+
+fn parse_command(line: string) -> BadInput!Command {
+    let verb = first_word(line)
+    let args = after_first_word(line)
+    if verb == "show" {
+        let command: Command = Show { }
+        return command
+    }
+    if verb == "help" {
+        let command: Command = Help { }
+        return command
+    }
+    if verb == "deposit" {
+        let amount = try parse_amount(after_first_word(args))
+        let command: Command = Deposit { who = first_word(args), amount = amount }
+        return command
+    }
+    if verb == "withdraw" {
+        let amount = try parse_amount(after_first_word(args))
+        let command: Command = Withdraw { who = first_word(args), amount = amount }
+        return command
+    }
+    if verb == "transfer" {
+        let rest = after_first_word(args)
+        let amount = try parse_amount(after_first_word(rest))
+        let command: Command = Transfer { from = first_word(args), to = first_word(rest), amount = amount }
+        return command
+    }
+    return error BadInput { message = $"unknown command '{verb}' (try 'help')" }
+}
+
+fn show(bank: &Bank) {
+    print($"  alice: {bank.alice.balance}")
+    print($"  bob:   {bank.bob.balance}")
+    print($"  carol: {bank.carol.balance}")
+}
+
+fn execute(bank: &mut Bank, line: string) -> anyerror! {
+    let command = try parse_command(line)
+    match command {
+        _: Show => show(&bank)
+        _: Help => {
+            print("  show | deposit <who> <n> | withdraw <who> <n> | transfer <from> <to> <n> | help | quit")
+        }
+        d: Deposit => {
+            try bank.deposit(d.who, d.amount)
+            print($"  deposited {d.amount} to {d.who}")
+        }
+        w: Withdraw => {
+            try bank.withdraw(w.who, w.amount)
+            print($"  withdrew {w.amount} from {w.who}")
+        }
+        t: Transfer => {
+            try bank.transfer(t.from, t.to, t.amount)
+            print($"  moved {t.amount} from {t.from} to {t.to}")
+        }
+    }
+}
+
+// ---- the loop --------------------------------------------------------------------------------------------------------------
+
+fn main() {
+    let mut bank = Bank::new()
+    print("Tiny bank. Type 'help' for the commands, 'quit' to leave.")
+    while true {
+        Console::Write("> ")
+        let line = Console::ReadLine()
+        if line == "" {
+            continue
+        }
+        if String::IsNullOrEmpty(line) {
+            break // the input ended: ReadLine gives null, which is not equal to "" but is "null or empty"
+        }
+        let text = line.Trim()
+        if text == "quit" {
+            break
+        }
+        execute(&mut bank, text) catch e => print($"  error: {e.message}")
+    }
+    print("bye")
+}

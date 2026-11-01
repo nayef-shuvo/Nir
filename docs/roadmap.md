@@ -1072,3 +1072,8 @@ set of missing BCL-interop features.
 - Optional `A | B` union syntax.
 - `frozen` types, structural types, Rust-style borrow checking.
 - Syntax error hint for a struct literal in an `if` / `while` head (today: `no viable alternative at input 'P'`; suggest parentheses, as Rust does).
+- Friction found while writing `samples/apps/bank.nir` (candidates for the next slices):
+  - A member of a union returned from a function whose result is `E!Union` needs an intermediate `let c: Union = Member {..}`; converting a member straight to `E!Union` (two steps) is not done.
+  - No `Length`/other .NET properties and no arrays: parsing a line means `IndexOf` and `Substring`; no `Split`, no command-line arguments.
+  - A null .NET string (end of input) is not `== ""`; the demo tells them apart with `String::IsNullOrEmpty` (`?string` is slice 10).
+  - A `catch e => print(..)` handler only fits a result that carries no value; for others use a block that returns or give a value.

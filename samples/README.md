@@ -29,6 +29,18 @@ src/Nir.Cli/bin/Debug/net10.0/nir run samples/arithmetic.nir
 | `dotnet_errors.nir` | `try` / `catch` on .NET calls: `Int32::Parse(s) catch 0`, `try IO::File::ReadAllText(p)` |
 | `file_io.nir` | writing, reading and deleting a file through `System.IO` |
 
+## Apps (`apps/`)
+
+Bigger programs that use several features together. Type to them.
+
+| File | Shows |
+|---|---|
+| `apps/bank.nir` | a terminal bank: structs with methods, borrows, a union of commands with `match`, errors with `try` / `catch`, `Console::ReadLine`, `Int32::Parse` |
+
+```bash
+src/Nir.Cli/bin/Debug/net10.0/nir run samples/apps/bank.nir
+```
+
 ## Programs with a compile error (`errors/`)
 
 Each file starts with a comment saying which error to expect and on which line. The compiler prints
