@@ -8,7 +8,7 @@ namespace Nir.Compiler.Semantics;
 public sealed class BorrowTypeSymbol : TypeSymbol
 {
     internal BorrowTypeSymbol(StructTypeSymbol element, bool isMutable)
-        : base((isMutable ? "&mut " : "&") + element.Name)
+        : base((isMutable ? Punctuation.MutableBorrow : Punctuation.SharedBorrow) + element.Name)
     {
         Element = element;
         IsMutable = isMutable;

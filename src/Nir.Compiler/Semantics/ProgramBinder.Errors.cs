@@ -44,7 +44,7 @@ internal sealed partial class ProgramBinder
         }
         else if (!IsErrorType(error))
         {
-            Error(DiagnosticCodes.NotAnErrorType, $"the type before '!' must be an error type or 'anyerror', but '{error}' is not one", syntax.Error.Span);
+            Error(DiagnosticCodes.NotAnErrorType, $"the type before '{Punctuation.ResultMarker}' must be an error type or '{TypeNames.AnyErrorType}', but '{error}' is not one", syntax.Error.Span);
             failed = true;
         }
 
@@ -58,7 +58,7 @@ internal sealed partial class ProgramBinder
             }
             else if (IsErrorType(success) || success is ResultTypeSymbol)
             {
-                Error(DiagnosticCodes.InvalidResultValue, $"the value after '!' cannot be an error or a result, but '{success}' is one", successSyntax.Span);
+                Error(DiagnosticCodes.InvalidResultValue, $"the value after '{Punctuation.ResultMarker}' cannot be an error or a result, but '{success}' is one", successSyntax.Span);
                 failed = true;
             }
         }
@@ -91,7 +91,7 @@ internal sealed partial class ProgramBinder
 
         if (message.Type != TypeSymbol.StringType)
         {
-            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{message.Type}' to 'string'", expression.Message.Span);
+            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{message.Type}' to '{TypeNames.StringType}'", expression.Message.Span);
             return new BoundErrorExpression();
         }
 
@@ -184,7 +184,7 @@ internal sealed partial class ProgramBinder
         var valueType = result?.Success;
         _scopes.Push();
         VariableSymbol? variable = null;
-        if (catchExpression.Name is { } name && name.Text != "_")
+        if (catchExpression.Name is { } name && name.Text != ReservedNames.Discard)
         {
             variable = new VariableSymbol(name.Text, result?.Error ?? TypeSymbol.ErrorType, isMutable: false);
             Declare(variable, name);

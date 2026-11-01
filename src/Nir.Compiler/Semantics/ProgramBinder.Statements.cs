@@ -16,7 +16,7 @@ internal sealed partial class ProgramBinder
         var condition = BindExpression(expression);
         if (condition.Type != TypeSymbol.BoolType && condition.Type != TypeSymbol.ErrorType)
         {
-            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{condition.Type}' to 'bool'", expression.Span);
+            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{condition.Type}' to '{TypeNames.BoolType}'", expression.Span);
         }
 
         return condition;
@@ -66,7 +66,7 @@ internal sealed partial class ProgramBinder
         var bound = BindExpression(expression);
         if (bound.Type != TypeSymbol.IntType && bound.Type != TypeSymbol.ErrorType)
         {
-            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{bound.Type}' to 'int'", expression.Span);
+            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{bound.Type}' to '{TypeNames.IntType}'", expression.Span);
         }
 
         return bound;
@@ -110,7 +110,7 @@ internal sealed partial class ProgramBinder
             {
                 Error(
                     DiagnosticCodes.ReturnValueInUnitFunction,
-                    $"cannot return a value from '{function.Name}' because it returns '()'",
+                    $"cannot return a value from '{function.Name}' because it returns '{TypeNames.UnitType}'",
                     statement.Value!.Span);
             }
         }
@@ -150,7 +150,7 @@ internal sealed partial class ProgramBinder
         }
         else if (type == TypeSymbol.UnitType)
         {
-            Error(DiagnosticCodes.UnitVariable, $"cannot declare '{declaration.Name.Text}' with type '()'", declaration.Name.Span);
+            Error(DiagnosticCodes.UnitVariable, $"cannot declare '{declaration.Name.Text}' with type '{TypeNames.UnitType}'", declaration.Name.Span);
             type = TypeSymbol.ErrorType;
         }
 
@@ -174,7 +174,7 @@ internal sealed partial class ProgramBinder
         {
             if (BindSelf(self).Type != TypeSymbol.ErrorType)
             {
-                Error(DiagnosticCodes.NotMutable, "cannot assign to 'self' itself; assign to its fields instead", self.Span);
+                Error(DiagnosticCodes.NotMutable, $"cannot assign to '{ReservedNames.SelfValue}' itself; assign to its fields instead", self.Span);
             }
 
             return new BoundExpressionStatement(value);
@@ -219,17 +219,17 @@ internal sealed partial class ProgramBinder
 
     // The built-in types and the structs of this file.
     private TypeSymbol? LookupType(string name) =>
-        LookupPrimitive(name) ?? (name == "Self" ? _selfType : _structs.GetValueOrDefault(name)) ??
+        LookupPrimitive(name) ?? (name == ReservedNames.SelfType ? _selfType : _structs.GetValueOrDefault(name)) ??
         (_aliasDeclarations.ContainsKey(name) ? ResolveAlias(name) : null) ??
         (_unionDeclarations.ContainsKey(name) ? ResolveUnion(name) : null);
 
     private static TypeSymbol? LookupPrimitive(string name) => name switch
     {
-        "int" => TypeSymbol.IntType,
-        "double" => TypeSymbol.DoubleType,
-        "bool" => TypeSymbol.BoolType,
-        "string" => TypeSymbol.StringType,
-        "anyerror" => AnyErrorTypeSymbol.Instance,
+        TypeNames.IntType => TypeSymbol.IntType,
+        TypeNames.DoubleType => TypeSymbol.DoubleType,
+        TypeNames.BoolType => TypeSymbol.BoolType,
+        TypeNames.StringType => TypeSymbol.StringType,
+        TypeNames.AnyErrorType => AnyErrorTypeSymbol.Instance,
         _ => null,
     };
 }

@@ -60,7 +60,7 @@ internal sealed partial class ProgramBinder
                     }
                     else if (value.Type == TypeSymbol.UnitType)
                     {
-                        Error(DiagnosticCodes.UnitInInterpolation, "cannot use a value of type '()' in an interpolated string", hole.Expression.Span);
+                        Error(DiagnosticCodes.UnitInInterpolation, $"cannot use a value of type '{TypeNames.UnitType}' in an interpolated string", hole.Expression.Span);
                         failed = true;
                     }
                     else if (value.Type is StructTypeSymbol or TupleTypeSymbol or UnionTypeSymbol or AnyErrorTypeSymbol)

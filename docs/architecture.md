@@ -38,11 +38,13 @@ Nir2/
 ├── src/
 │   ├── Nir.Compiler/           the whole compiler, one project
 │   │   ├── Diagnostics/
-│   │   ├── Clr/                ClrUniverse: the .NET types the compiler can see
+│   │   ├── Clr/                ClrUniverse (the .NET types the compiler can see), ClrTypes (the ones used constantly, looked up once),
+│   │   │                       ClrNames, GeneratedNames (names of what the compiler generates)
+│   │   ├── Language/           TypeNames, Punctuation, ReservedNames, ImportRoot: the words of Nir as constants
 │   │   ├── Parsing/            *.g4, NirLexerBase.cs, AstBuilder.cs, ParserErrorListener.cs, SyntaxParser.cs
 │   │   ├── Syntax/             AST records
 │   │   ├── Semantics/          Binder, symbols, types, bound tree
-│   │   ├── Emit/               Emitter, RuntimeConfigWriter
+│   │   ├── Emit/               Emitter(.Definitions), BodyEmitter.* (one partial class split by topic), EmitContext, RuntimeConfigWriter
 │   │   └── NirCompiler.cs      the public facade
 │   └── Nir.Cli/                the `nir` executable (assembly name `nir`)
 └── tests/
@@ -57,7 +59,8 @@ several projects. Split a phase into its own project only when a concrete reason
 that needs just the parser). Do not split preemptively.
 
 Namespaces match folders: `Nir.Compiler.Diagnostics`, `Nir.Compiler.Parsing`, `Nir.Compiler.Syntax`,
-`Nir.Compiler.Semantics`, `Nir.Compiler.Emit`. The facade `NirCompiler` is in `Nir.Compiler`.
+`Nir.Compiler.Semantics`, `Nir.Compiler.Emit`, plus `Nir.Compiler.Language` (constants for the words of the language, usable
+everywhere through a global using) and `Nir.Compiler.Clr`. The facade `NirCompiler` is in `Nir.Compiler`.
 The CLI is `Nir.Cli`. Tests are `Nir.Tests.<Folder>`.
 
 ## 3. Dependency rules

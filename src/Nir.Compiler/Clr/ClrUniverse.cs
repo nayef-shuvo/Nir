@@ -41,7 +41,7 @@ internal static class ClrUniverse
         public Universe()
         {
             var paths = Directory.GetFiles(RuntimeEnvironment.GetRuntimeDirectory(), "*.dll");
-            _context = new MetadataLoadContext(new PathAssemblyResolver(paths), "System.Private.CoreLib");
+            _context = new MetadataLoadContext(new PathAssemblyResolver(paths), ClrNames.CoreLibrary);
             _index = new Lazy<Index>(() => Index.Build(paths), LazyThreadSafetyMode.ExecutionAndPublication);
         }
 

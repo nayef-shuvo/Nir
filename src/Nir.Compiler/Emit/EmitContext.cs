@@ -17,6 +17,11 @@ internal sealed class EmitContext
 
     public Dictionary<UnionTypeSymbol, UnionLayout> Unions { get; } = [];
 
+    // A tuple's CLR type and the path to each of its elements are worked out once; tuples compare by their element types.
+    private readonly Dictionary<TupleTypeSymbol, Type> _tupleTypes = [];
+
+    private readonly Dictionary<FieldSymbol, IReadOnlyList<FieldInfo>> _tupleFieldPaths = [];
+
     /// <summary>The class that holds the functions; generated helper methods go here too.</summary>
     public TypeBuilder Host { get; set; } = null!;
 
@@ -48,7 +53,16 @@ internal sealed class EmitContext
     // its first seven and puts the rest in a ValueTuple of its own, in the eighth type argument (the `Rest` field), and so on.
     private const int _chunkSize = 7;
 
-    private Type ValueTupleOf(TupleTypeSymbol tuple) => ChunkType([.. tuple.Elements.Select(element => element.Type)]);
+    private Type ValueTupleOf(TupleTypeSymbol tuple)
+    {
+        if (!_tupleTypes.TryGetValue(tuple, out var type))
+        {
+            type = ChunkType([.. tuple.Elements.Select(element => element.Type)]);
+            _tupleTypes[tuple] = type;
+        }
+
+        return type;
+    }
 
     private Type ChunkType(IReadOnlyList<TypeSymbol> types)
     {
@@ -67,7 +81,7 @@ internal sealed class EmitContext
         types.Any(ContainsStruct) ? RuntimeValueTuple(arity) : LoadedValueTuple(arity);
 
     private static Type LoadedValueTuple(int arity) =>
-        ClrUniverse.FindType("System.ValueTuple`" + arity.ToString(CultureInfo.InvariantCulture))
+        ClrUniverse.FindType(ClrNames.ValueTuplePrefix + arity.ToString(CultureInfo.InvariantCulture))
         ?? throw new InvalidOperationException("System.ValueTuple was not found.");
 
     private static Type RuntimeValueTuple(int arity) => arity switch
@@ -99,17 +113,23 @@ internal sealed class EmitContext
             return [Fields[field]];
         }
 
+        if (_tupleFieldPaths.TryGetValue(field, out var known))
+        {
+            return known;
+        }
+
         var path = new List<FieldInfo>();
         IReadOnlyList<TypeSymbol> types = [.. tuple.Elements.Select(element => element.Type)];
         var index = tuple.Elements.IndexOf(field);
         while (index >= _chunkSize)
         {
-            path.Add(ChunkField(types, "Rest"));
+            path.Add(ChunkField(types, GeneratedNames.TupleRest));
             types = [.. types.Skip(_chunkSize)];
             index -= _chunkSize;
         }
 
-        path.Add(ChunkField(types, "Item" + (index + 1).ToString(CultureInfo.InvariantCulture)));
+        path.Add(ChunkField(types, GeneratedNames.TupleItem(index)));
+        _tupleFieldPaths[field] = path;
         return path;
     }
 

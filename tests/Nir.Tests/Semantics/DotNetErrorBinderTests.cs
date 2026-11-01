@@ -1,25 +1,11 @@
 using Nir.Compiler.Diagnostics;
-using Nir.Compiler.Parsing;
 using Nir.Compiler.Semantics;
+using static Nir.Tests.Support.BinderHarness;
 
 namespace Nir.Tests.Semantics;
 
 public class DotNetErrorBinderTests
 {
-    private static (BoundProgram? Program, DiagnosticBag Bag, IReadOnlyList<string> Diagnostics) Bind(string text)
-    {
-        var source = new SourceText("test.nir", text);
-        var bag = new DiagnosticBag();
-        var program = Binder.Bind(SyntaxParser.Parse(source, bag), source, bag);
-
-        var described = bag.Select(d =>
-        {
-            var (line, column) = d.Source.GetLineAndColumn(d.Span.Start);
-            return $"{d.Code} {line}:{column}";
-        }).ToList();
-        return (program, bag, described);
-    }
-
     // Lines 1 and 2 are the import and a blank line, so `fn run() -> anyerror! {` is line 3 and its statements start on line 4.
     private const string Imports = "using clr::cs::System::{Int32, IO}\n\n";
 

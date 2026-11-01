@@ -9,9 +9,9 @@ public sealed class AnyErrorTypeSymbol : TypeSymbol
     public static readonly AnyErrorTypeSymbol Instance = new();
 
     private AnyErrorTypeSymbol()
-        : base("anyerror")
+        : base(TypeNames.AnyErrorType)
     {
-        Message = new FieldSymbol("message", StringType, this);
+        Message = new FieldSymbol(ReservedNames.MessageField, StringType, this);
     }
 
     /// <summary>The one field every error has: <c>e.message</c>.</summary>

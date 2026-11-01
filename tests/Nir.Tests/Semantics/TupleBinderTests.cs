@@ -1,25 +1,11 @@
 using Nir.Compiler.Diagnostics;
-using Nir.Compiler.Parsing;
 using Nir.Compiler.Semantics;
+using static Nir.Tests.Support.BinderHarness;
 
 namespace Nir.Tests.Semantics;
 
 public class TupleBinderTests
 {
-    private static (BoundProgram? Program, DiagnosticBag Bag, IReadOnlyList<string> Diagnostics) Bind(string text)
-    {
-        var source = new SourceText("test.nir", text);
-        var bag = new DiagnosticBag();
-        var program = Binder.Bind(SyntaxParser.Parse(source, bag), source, bag);
-
-        var described = bag.Select(d =>
-        {
-            var (line, column) = d.Source.GetLineAndColumn(d.Span.Start);
-            return $"{d.Code} {line}:{column}";
-        }).ToList();
-        return (program, bag, described);
-    }
-
     // `fn main() {` is line 1, so the first statement is on line 2 at column 5.
     private static (BoundProgram? Program, DiagnosticBag Bag, IReadOnlyList<string> Diagnostics) BindMain(params string[] lines) =>
         Bind("fn main() {\n" + string.Concat(lines.Select(l => "    " + l + "\n")) + "}");

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Nir.Compiler.Clr;
 
 namespace Nir.Compiler.Semantics;
 
@@ -10,11 +11,11 @@ namespace Nir.Compiler.Semantics;
 public sealed class ResultTypeSymbol : UnionTypeSymbol
 {
     internal ResultTypeSymbol(TypeSymbol error, TypeSymbol? success, int number)
-        : base(error.Name + "!" + success?.Name)
+        : base(error.Name + Punctuation.ResultMarker + success?.Name)
     {
         Error = error;
         Success = success;
-        ClrName = "Nir.Result" + number;
+        ClrName = GeneratedNames.ResultTypePrefix + number;
         Members = success is null ? [error] : [error, success];
     }
 

@@ -9,7 +9,7 @@ public abstract record SyntaxNode(TextSpan Span);
 /// <summary>A name that may have several parts, such as <c>IO::File::ReadAllText</c>; <c>Text</c> joins them with <c>::</c>.</summary>
 public sealed record QualifiedName(ImmutableArray<Identifier> Parts, TextSpan Span) : SyntaxNode(Span)
 {
-    public string Text => string.Join("::", Parts.Select(part => part.Text));
+    public string Text => string.Join(Punctuation.PathSeparator, Parts.Select(part => part.Text));
 }
 
 /// <summary>A name in the source.</summary>

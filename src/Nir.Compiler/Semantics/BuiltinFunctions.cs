@@ -11,7 +11,7 @@ internal static class BuiltinFunctions
 {
     private static readonly Dictionary<string, ImmutableArray<ClrMethodSymbol>> _functions = new()
     {
-        ["print"] =
+        [ReservedNames.Print] =
         [
             Print(TypeSymbol.IntType),
             Print(TypeSymbol.DoubleType),
@@ -26,5 +26,5 @@ internal static class BuiltinFunctions
 
     // Console.WriteLine has an overload for each of these types, on every supported runtime.
     private static ClrMethodSymbol Print(TypeSymbol parameterType) =>
-        new("print", ClrUniverse.FindType("System.Console")!.GetMethod("WriteLine", [parameterType.ClrType])!, TypeSymbol.UnitType, [parameterType]);
+        new(ReservedNames.Print, ClrTypes.ConsoleWriteLine(parameterType.ClrType), TypeSymbol.UnitType, [parameterType]);
 }

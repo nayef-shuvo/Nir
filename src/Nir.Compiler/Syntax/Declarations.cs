@@ -63,13 +63,13 @@ public abstract record TypeSyntax(TextSpan Span) : SyntaxNode(Span)
 /// <summary>A named type: <c>Point</c>, and in a parameter also <c>&amp;Point</c> or <c>&amp;mut Point</c>.</summary>
 public sealed record TypeReference(Identifier Name, BorrowKind Borrow, TextSpan Span) : TypeSyntax(Span)
 {
-    public override string Text => Borrow switch { BorrowKind.Shared => "&" + Name.Text, BorrowKind.Mutable => "&mut " + Name.Text, _ => Name.Text };
+    public override string Text => Borrow switch { BorrowKind.Shared => Punctuation.SharedBorrow + Name.Text, BorrowKind.Mutable => Punctuation.MutableBorrow + Name.Text, _ => Name.Text };
 }
 
 /// <summary><c>E!T</c> (<paramref name="Success"/> set) or <c>E!</c> (success carries nothing): an error of type E, or a T.</summary>
 public sealed record ResultTypeSyntax(Identifier Error, TypeSyntax? Success, TextSpan Span) : TypeSyntax(Span)
 {
-    public override string Text => Error.Text + "!" + Success?.Text;
+    public override string Text => Error.Text + Punctuation.ResultMarker + Success?.Text;
 }
 
 /// <summary><c>(int, double)</c> or <c>(x: int, y: int)</c>.</summary>

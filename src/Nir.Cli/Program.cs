@@ -13,7 +13,7 @@ internal static class Program
                 return ExitCodes.Usage;
             }
 
-            return commandLine!.Command == "build" ? Commands.Build(commandLine) : Commands.Run(commandLine);
+            return commandLine!.Command == CommandNames.Build ? Commands.Build(commandLine) : Commands.Run(commandLine);
         }
 #pragma warning disable CA1031 // The top-level handler turns any compiler bug into exit code 3 instead of a raw crash.
         catch (Exception exception)

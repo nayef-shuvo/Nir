@@ -162,7 +162,7 @@ internal sealed partial class ProgramBinder
             // The arm is bound even when its case is wrong, with an error-typed variable, so mistakes inside it are reported too.
             _scopes.Push();
             VariableSymbol? variable = null;
-            if (arm.Name.Text != "_")
+            if (arm.Name.Text != ReservedNames.Discard)
             {
                 variable = new VariableSymbol(arm.Name.Text, index >= 0 ? caseType : TypeSymbol.ErrorType, isMutable: false);
                 Declare(variable, arm.Name);

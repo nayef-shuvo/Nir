@@ -59,6 +59,6 @@ public sealed class UserFunctionSymbol(
     /// <summary>The variable <c>self</c> in a method: a borrow of the owner. Null if there is no receiver.</summary>
     public VariableSymbol? SelfVariable { get; } =
         owner is not null && receiver != ReceiverKind.None
-            ? new VariableSymbol("self", owner.BorrowOf(receiver == ReceiverKind.Mutable), isMutable: false)
+            ? new VariableSymbol(ReservedNames.SelfValue, owner.BorrowOf(receiver == ReceiverKind.Mutable), isMutable: false)
             : null;
 }

@@ -1,25 +1,11 @@
 using Nir.Compiler.Diagnostics;
-using Nir.Compiler.Parsing;
 using Nir.Compiler.Semantics;
+using static Nir.Tests.Support.BinderHarness;
 
 namespace Nir.Tests.Semantics;
 
 public class ErrorBinderTests
 {
-    private static (BoundProgram? Program, DiagnosticBag Bag, IReadOnlyList<string> Diagnostics) Bind(string text)
-    {
-        var source = new SourceText("test.nir", text);
-        var bag = new DiagnosticBag();
-        var program = Binder.Bind(SyntaxParser.Parse(source, bag), source, bag);
-
-        var described = bag.Select(d =>
-        {
-            var (line, column) = d.Source.GetLineAndColumn(d.Span.Start);
-            return $"{d.Code} {line}:{column}";
-        }).ToList();
-        return (program, bag, described);
-    }
-
     // Lines 1 and 2 declare the errors and `fn main() {` is line 3, so the first statement of main is on line 4 at column 5.
     private const string Errors =
         "type ParseError = error { message: string, line: int }\n" +

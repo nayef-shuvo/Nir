@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Reflection;
 
@@ -15,14 +16,26 @@ internal sealed record ClrCandidate(MethodInfo Method, ImmutableArray<TypeSymbol
 /// <summary>Finds the public methods of a .NET type that Nir can call: every parameter is an <c>int</c>, <c>double</c>, <c>bool</c> or <c>string</c>.</summary>
 internal static class ClrMethods
 {
+    // Reflection over a large type such as Console or String is slow and the answers never change, so each type's methods are
+    // listed once per process, grouped by name, and the candidates for a name are worked out once.
+    private static readonly ConcurrentDictionary<(Type Type, bool IsStatic), ILookup<string, MethodInfo>> _methods = new();
+
+    private static readonly ConcurrentDictionary<(Type Type, string Name, bool IsStatic), ImmutableArray<ClrCandidate>> _candidates = new();
+
     /// <summary>True if the type has any public method with this name, whether or not Nir can call it.</summary>
     public static bool HasMethodNamed(Type type, string name, bool isStatic) =>
-        type.GetMethods(Flags(isStatic)).Any(m => m.Name == name);
+        MethodsOf(type, isStatic).Contains(name);
 
-    public static ImmutableArray<ClrCandidate> FindCandidates(Type type, string name, bool isStatic)
+    public static ImmutableArray<ClrCandidate> FindCandidates(Type type, string name, bool isStatic) =>
+        _candidates.GetOrAdd((type, name, isStatic), key => FindCandidatesUncached(key.Type, key.Name, key.IsStatic));
+
+    private static ILookup<string, MethodInfo> MethodsOf(Type type, bool isStatic) =>
+        _methods.GetOrAdd((type, isStatic), key => key.Type.GetMethods(Flags(key.IsStatic)).ToLookup(m => m.Name));
+
+    private static ImmutableArray<ClrCandidate> FindCandidatesUncached(Type type, string name, bool isStatic)
     {
         var candidates = ImmutableArray.CreateBuilder<ClrCandidate>();
-        foreach (var method in type.GetMethods(Flags(isStatic)).Where(m => m.Name == name && !m.IsGenericMethodDefinition))
+        foreach (var method in MethodsOf(type, isStatic)[name].Where(m => !m.IsGenericMethodDefinition))
         {
             var parameters = method.GetParameters().Select(p => TypeSymbol.FromClr(p.ParameterType)).ToList();
             if (parameters.Any(p => p is null || p == TypeSymbol.UnitType))

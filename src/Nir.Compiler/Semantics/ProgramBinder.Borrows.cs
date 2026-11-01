@@ -66,7 +66,7 @@ internal sealed partial class ProgramBinder
         var root = BoundPlaces.Root(place);
         if (reference.IsMutable && !BoundPlaces.IsMutable(root))
         {
-            Error(DiagnosticCodes.NotMutable, NotMutableMessage($"borrow '{root.Name}' with '&mut'", root), reference.Span);
+            Error(DiagnosticCodes.NotMutable, NotMutableMessage($"borrow '{root.Name}' with '{Punctuation.MutableBorrowKeyword}'", root), reference.Span);
             return new BoundErrorExpression();
         }
 
@@ -115,11 +115,11 @@ internal sealed partial class ProgramBinder
         return (argument, parameter) switch
         {
             (_, BorrowTypeSymbol wanted) when argument == wanted.Element =>
-                message + $"; write '{(wanted.IsMutable ? "&mut" : "&")}' before the variable to borrow it",
+                message + $"; write '{(wanted.IsMutable ? Punctuation.MutableBorrowKeyword : Punctuation.SharedBorrow)}' before the variable to borrow it",
             (BorrowTypeSymbol given, _) when parameter == given.Element =>
                 message + "; a borrow cannot be passed where a value is expected, pass the variable itself to copy it",
             (BorrowTypeSymbol { IsMutable: false }, BorrowTypeSymbol { IsMutable: true }) =>
-                message + "; borrow it with '&mut' instead",
+                message + $"; borrow it with '{Punctuation.MutableBorrowKeyword}' instead",
             _ => message,
         };
     }

@@ -110,7 +110,7 @@ internal sealed partial class ProgramBinder
 
         foreach (var (element, syntax) in elements.Zip(literal.Elements).Where(pair => pair.First.Type == TypeSymbol.UnitType))
         {
-            Error(DiagnosticCodes.UnitVariable, "cannot use a value of type '()' as a tuple element", syntax.Span);
+            Error(DiagnosticCodes.UnitVariable, $"cannot use a value of type '{TypeNames.UnitType}' as a tuple element", syntax.Span);
             failed = true;
         }
 
@@ -156,7 +156,7 @@ internal sealed partial class ProgramBinder
         for (var i = 0; i < declaration.Names.Length; i++)
         {
             var name = declaration.Names[i];
-            if (name.Name.Text == "_")
+            if (name.Name.Text == ReservedNames.Discard)
             {
                 variables.Add(null); // `_` takes the element and drops it
                 continue;

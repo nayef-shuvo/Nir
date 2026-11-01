@@ -1,6 +1,6 @@
 using Nir.Compiler.Diagnostics;
-using Nir.Compiler.Parsing;
 using Nir.Compiler.Semantics;
+using static Nir.Tests.Support.BinderHarness;
 
 namespace Nir.Tests.Semantics;
 
@@ -8,20 +8,6 @@ public class StructBinderTests
 {
     // Line 1 declares Point, so `fn main() {` is line 2 and the first statement of main is on line 3 at column 5.
     private const string PointDeclaration = "type Point = struct { x: int, y: int }\n";
-
-    private static (BoundProgram? Program, DiagnosticBag Bag, IReadOnlyList<string> Diagnostics) Bind(string text)
-    {
-        var source = new SourceText("test.nir", text);
-        var bag = new DiagnosticBag();
-        var program = Binder.Bind(SyntaxParser.Parse(source, bag), source, bag);
-
-        var described = bag.Select(d =>
-        {
-            var (line, column) = d.Source.GetLineAndColumn(d.Span.Start);
-            return $"{d.Code} {line}:{column}";
-        }).ToList();
-        return (program, bag, described);
-    }
 
     private static (BoundProgram? Program, DiagnosticBag Bag, IReadOnlyList<string> Diagnostics) BindMain(params string[] lines) =>
         Bind(PointDeclaration + "fn main() {\n" + string.Concat(lines.Select(l => "    " + l + "\n")) + "}");

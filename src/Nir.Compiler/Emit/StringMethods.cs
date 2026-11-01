@@ -1,12 +1,12 @@
 using System.Reflection;
-using Nir.Compiler.Semantics;
+using Nir.Compiler.Clr;
 
 namespace Nir.Compiler.Emit;
 
 /// <summary>The <c>System.String</c> methods the emitter calls, taken from the same load context as every other CLR type.</summary>
 internal static class StringMethods
 {
-    private static readonly Type _string = TypeSymbol.StringType.ClrType;
+    private static readonly Type _string = ClrTypes.String;
 
     public static readonly MethodInfo Concat2 = _string.GetMethod("Concat", [_string, _string])!;
 

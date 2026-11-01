@@ -1,25 +1,11 @@
 using Nir.Compiler.Diagnostics;
-using Nir.Compiler.Parsing;
 using Nir.Compiler.Semantics;
+using static Nir.Tests.Support.BinderHarness;
 
 namespace Nir.Tests.Semantics;
 
 public class UnionBinderTests
 {
-    private static (BoundProgram? Program, DiagnosticBag Bag, IReadOnlyList<string> Diagnostics) Bind(string text)
-    {
-        var source = new SourceText("test.nir", text);
-        var bag = new DiagnosticBag();
-        var program = Binder.Bind(SyntaxParser.Parse(source, bag), source, bag);
-
-        var described = bag.Select(d =>
-        {
-            var (line, column) = d.Source.GetLineAndColumn(d.Span.Start);
-            return $"{d.Code} {line}:{column}";
-        }).ToList();
-        return (program, bag, described);
-    }
-
     // Lines 1 to 3 declare the types, so `fn main() {` is line 4 and the first statement is line 5 at column 5.
     private const string Types =
         "type Circle = struct { r: double }\n" +

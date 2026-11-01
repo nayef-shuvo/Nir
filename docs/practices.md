@@ -145,3 +145,14 @@ that is a "decision required" and the user must decide before coding (each slice
   code 3. Any other suppression needs a user decision first.
 - Do not invent syntax or semantics that `design.md` does not define.
 - Do not leave a failing or skipped test.
+
+## Names and literals
+
+- Never write the name of a Nir type, a keyword the compiler treats specially, a piece of punctuation (`::`, `!`, `&mut`), or the
+  name of a .NET type or generated member as a string literal in compiler code. Use the constants: `TypeNames`, `Punctuation`,
+  `ReservedNames`, `ImportRoot` (namespace `Nir.Compiler.Language`, available everywhere), `ClrNames` / `ClrTypes` / `GeneratedNames`
+  (`Nir.Compiler.Clr`) and `CommandNames` in the CLI. They are `const`, so the compiler resolves them at build time, and switch
+  expressions over them stay string switches.
+- A `.NET` type or member the compiler needs often belongs in `ClrTypes`, which looks it up once. Do not call `ClrUniverse.CoreType`
+  or `GetMethod` in a hot path.
+- Test helpers that several test files need (like `BinderHarness.Bind`) live in `tests/Nir.Tests/Support/`.

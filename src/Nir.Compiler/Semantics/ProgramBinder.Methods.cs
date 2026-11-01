@@ -41,7 +41,7 @@ internal sealed partial class ProgramBinder
 
     // A struct named in code: `Self` inside an impl, or one of the structs of this file.
     private StructTypeSymbol? StructNamed(Identifier name) =>
-        name.Text == "Self" ? _selfType : _structs.GetValueOrDefault(name.Text);
+        name.Text == ReservedNames.SelfType ? _selfType : _structs.GetValueOrDefault(name.Text);
 
     // The struct behind a value or a borrow of one; null for any other type.
     private static StructTypeSymbol? StructOf(TypeSymbol type) => type switch
@@ -59,7 +59,7 @@ internal sealed partial class ProgramBinder
             return new BoundVariableExpression(variable);
         }
 
-        Error(DiagnosticCodes.SelfOutsideMethod, "'self' can only be used inside a method that takes '&self' or '&mut self'", self.Span);
+        Error(DiagnosticCodes.SelfOutsideMethod, $"'{ReservedNames.SelfValue}' can only be used inside a method that takes '{Punctuation.SharedBorrow}{ReservedNames.SelfValue}' or '{Punctuation.MutableBorrow}{ReservedNames.SelfValue}'", self.Span);
         return new BoundErrorExpression();
     }
 
@@ -89,7 +89,7 @@ internal sealed partial class ProgramBinder
 
         if (method.Receiver == ReceiverKind.None)
         {
-            Error(DiagnosticCodes.NoSuchMember, $"'{name}' is an associated function; call it as {owner.Name}::{name}(...)", call.Method.Span);
+            Error(DiagnosticCodes.NoSuchMember, $"'{name}' is an associated function; call it as {owner.Name}{Punctuation.PathSeparator}{name}(...)", call.Method.Span);
             return new BoundErrorExpression();
         }
 
@@ -146,7 +146,7 @@ internal sealed partial class ProgramBinder
             return new BoundErrorExpression();
         }
 
-        return CheckUserCallArguments(call.Span, $"{owner.Name}::{name.Text}", call.Arguments, method, arguments) is { } checkedArguments
+        return CheckUserCallArguments(call.Span, $"{owner.Name}{Punctuation.PathSeparator}{name.Text}", call.Arguments, method, arguments) is { } checkedArguments
             ? new BoundCallExpression(method, checkedArguments)
             : new BoundErrorExpression();
     }
@@ -193,6 +193,6 @@ internal sealed partial class ProgramBinder
     // "cannot <action> because ...": a plain variable is not `mut`; a borrow is read-only.
     private static string NotMutableMessage(string action, VariableSymbol root) =>
         root.Type is BorrowTypeSymbol
-            ? $"cannot {action} because '{root.Name}' is a read-only borrow ('{root.Type}'); {(root.Name == "self" ? "take '&mut self'" : "take '&mut'")} to change it"
+            ? $"cannot {action} because '{root.Name}' is a read-only borrow ('{root.Type}'); {(root.Name == ReservedNames.SelfValue ? $"take '{Punctuation.MutableBorrow}{ReservedNames.SelfValue}'" : $"take '{Punctuation.MutableBorrowKeyword}'")} to change it"
             : $"cannot {action} because '{root.Name}' is not mutable";
 }

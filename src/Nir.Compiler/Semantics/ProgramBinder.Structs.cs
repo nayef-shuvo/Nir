@@ -39,9 +39,9 @@ internal sealed partial class ProgramBinder
             return $"'{name}' is a built-in type and cannot be redefined";
         }
 
-        if (name == "Program")
+        if (name == ReservedNames.ProgramClass)
         {
-            return "'Program' is reserved for the functions of the compiled program";
+            return $"'{ReservedNames.ProgramClass}' is reserved for the functions of the compiled program";
         }
 
         if (_structs.ContainsKey(name) || _aliasDeclarations.ContainsKey(name) || _unionDeclarations.ContainsKey(name))
@@ -230,7 +230,7 @@ internal sealed partial class ProgramBinder
         var field = receiver.Type switch
         {
             TupleTypeSymbol tuple => tuple.FindElement(access.Field.Text),
-            AnyErrorTypeSymbol any => access.Field.Text == "message" ? any.Message : null,
+            AnyErrorTypeSymbol any => access.Field.Text == ReservedNames.MessageField ? any.Message : null,
             _ => owner?.FindField(access.Field.Text),
         };
         if (field is null)
@@ -286,7 +286,7 @@ internal sealed partial class ProgramBinder
     private static string PathText(Expression path) => path switch
     {
         NameExpression name => name.Name.Text,
-        SelfExpression => "self",
+        SelfExpression => ReservedNames.SelfValue,
         FieldAccessExpression access => PathText(access.Receiver) + "." + access.Field.Text,
         _ => throw new UnreachableException(),
     };

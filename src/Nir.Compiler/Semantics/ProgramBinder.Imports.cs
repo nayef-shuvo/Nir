@@ -16,9 +16,9 @@ internal sealed partial class ProgramBinder
         foreach (var directive in usings)
         {
             var path = directive.Path;
-            if (path.Length < 2 || path[0].Text != "clr" || path[1].Text != "cs")
+            if (path.Length < 2 || path[0].Text != ImportRoot.Clr || path[1].Text != ImportRoot.CSharp)
             {
-                Error(DiagnosticCodes.InvalidImport, "imports must start with 'clr::cs'", path[0].Span);
+                Error(DiagnosticCodes.InvalidImport, $"imports must start with '{ImportRoot.Prefix}'", path[0].Span);
                 continue;
             }
 
@@ -40,7 +40,7 @@ internal sealed partial class ProgramBinder
         var alias = path[^1];
         if (path.Length < 3)
         {
-            Error(DiagnosticCodes.InvalidImport, "'clr::cs' alone names nothing; add a namespace or type after it", path[0].Span);
+            Error(DiagnosticCodes.InvalidImport, $"'{ImportRoot.Prefix}' alone names nothing; add a namespace or type after it", path[0].Span);
             return;
         }
 

@@ -43,9 +43,9 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
         // Pass 1c: the methods of every struct.
         DeclareImpls(unit.Impls);
 
-        if (!_functions.TryGetValue("main", out var entryPoint))
+        if (!_functions.TryGetValue(ReservedNames.EntryPoint, out var entryPoint))
         {
-            Error(DiagnosticCodes.MissingEntryPoint, "program has no 'main' function", new TextSpan(0, 0));
+            Error(DiagnosticCodes.MissingEntryPoint, $"program has no '{ReservedNames.EntryPoint}' function", new TextSpan(0, 0));
         }
 
         // Pass 2: bind the bodies.
@@ -66,9 +66,9 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
             .Select(p => new VariableSymbol(p.Name.Text, ResolveParameterType(p.Type), isMutable: false))
             .ToImmutableArray();
 
-        if (owner is null && declaration.Name.Text == "main" && ((declaration.ReturnType is not null && returnType is not ResultTypeSymbol { Success: null } && returnType != TypeSymbol.ErrorType) || parameters.Length > 0))
+        if (owner is null && declaration.Name.Text == ReservedNames.EntryPoint && ((declaration.ReturnType is not null && returnType is not ResultTypeSymbol { Success: null } && returnType != TypeSymbol.ErrorType) || parameters.Length > 0))
         {
-            Error(DiagnosticCodes.InvalidEntryPoint, "'main' must have no parameters and return nothing, or 'E!' for an error type E", declaration.Name.Span);
+            Error(DiagnosticCodes.InvalidEntryPoint, $"'{ReservedNames.EntryPoint}' must have no parameters and return nothing, or 'E{Punctuation.ResultMarker}' for an error type E", declaration.Name.Span);
         }
 
         if (owner is null && declaration.Receiver is { } receiverSyntax)

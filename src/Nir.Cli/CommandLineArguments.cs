@@ -25,8 +25,8 @@ internal static class CommandLineArguments
 
         return args[0] switch
         {
-            "build" => TryParseBuild(args, out commandLine, out error),
-            "run" => TryParseRun(args, out commandLine, out error),
+            CommandNames.Build => TryParseBuild(args, out commandLine, out error),
+            CommandNames.Run => TryParseRun(args, out commandLine, out error),
             _ => Fail($"unknown command '{args[0]}'", out error),
         };
     }
@@ -41,7 +41,7 @@ internal static class CommandLineArguments
 
         for (var i = 1; i < args.Length; i++)
         {
-            if (args[i] == "-o")
+            if (args[i] == CommandNames.OutputOption)
             {
                 if (i + 1 >= args.Length)
                 {
@@ -69,7 +69,7 @@ internal static class CommandLineArguments
             return Fail("no source file given", out error);
         }
 
-        commandLine = new CommandLine("build", file, output, []);
+        commandLine = new CommandLine(CommandNames.Build, file, output, []);
         return true;
     }
 
@@ -84,12 +84,12 @@ internal static class CommandLineArguments
         }
 
         var rest = args[2..];
-        if (rest.Length > 0 && rest[0] != "--")
+        if (rest.Length > 0 && rest[0] != CommandNames.ProgramArgumentsSeparator)
         {
             return Fail($"unexpected argument '{rest[0]}'", out error);
         }
 
-        commandLine = new CommandLine("run", args[1], string.Empty, rest.Length > 0 ? rest[1..] : []);
+        commandLine = new CommandLine(CommandNames.Run, args[1], string.Empty, rest.Length > 0 ? rest[1..] : []);
         return true;
     }
 
