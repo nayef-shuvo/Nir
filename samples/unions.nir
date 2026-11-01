@@ -1,0 +1,40 @@
+// A union is "one of these types". A member converts to the union where a union is expected; `match` takes it apart
+// and must handle every member.
+type Circle = struct { r: double }
+type Square = struct { side: double }
+type Shape = union { Circle, Square }
+
+type Value = union { int, string, (int, int) }
+
+fn area(s: Shape) -> double {
+    return match s {
+        c: Circle => 3.0 * c.r * c.r,
+        q: Square => q.side * q.side,
+    }
+}
+
+fn describe(v: Value) -> string {
+    match v {
+        n: int => { return $"the number {n}" }
+        s: string => { return "the text " + s }
+        p: (int, int) => { return $"the pair {p.0},{p.1}" }
+    }
+}
+
+fn main() {
+    let shape: Shape = Circle { r = 2.0 }
+    print(area(shape))
+    print(area(Square { side = 3.0 }))
+
+    print(describe(42))
+    print(describe("hello"))
+    print(describe((3, 4)))
+
+    let mut v: Value = 1
+    v = "now a string"
+    match v {
+        n: int => print("still an int")
+        _: string => print("a string")
+        _: (int, int) => print("a pair")
+    }
+}

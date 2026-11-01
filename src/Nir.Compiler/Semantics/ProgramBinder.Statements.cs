@@ -114,7 +114,11 @@ internal sealed partial class ProgramBinder
         {
             Error(DiagnosticCodes.MissingReturnValue, $"'{function.Name}' must return a value of type '{expected}'", statement.Span);
         }
-        else if (value.Type != expected)
+        else if (Convert(value, expected) is { } converted)
+        {
+            value = converted;
+        }
+        else
         {
             Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{expected}'", statement.Value!.Span);
         }
@@ -131,7 +135,11 @@ internal sealed partial class ProgramBinder
         if (declaration.DeclaredType is { } annotation)
         {
             type = ResolveTypeSyntax(annotation);
-            if (type != TypeSymbol.ErrorType && initializer.Type != TypeSymbol.ErrorType && initializer.Type != type)
+            if (type != TypeSymbol.ErrorType && initializer.Type != TypeSymbol.ErrorType && Convert(initializer, type) is { } converted)
+            {
+                initializer = converted;
+            }
+            else if (type != TypeSymbol.ErrorType && initializer.Type != TypeSymbol.ErrorType)
             {
                 Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{initializer.Type}' to '{type}'", declaration.Initializer.Span);
             }
@@ -189,9 +197,16 @@ internal sealed partial class ProgramBinder
             Error(DiagnosticCodes.NotMutable, $"cannot assign to '{variable.Name}' because it is not mutable", target.Span);
         }
 
-        if (value.Type != TypeSymbol.ErrorType && variable.Type != TypeSymbol.ErrorType && value.Type != variable.Type)
+        if (value.Type != TypeSymbol.ErrorType && variable.Type != TypeSymbol.ErrorType)
         {
-            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{variable.Type}'", assignment.Value.Span);
+            if (Convert(value, variable.Type) is { } converted)
+            {
+                value = converted;
+            }
+            else
+            {
+                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{variable.Type}'", assignment.Value.Span);
+            }
         }
 
         return new BoundAssignment(variable, value);
@@ -200,7 +215,8 @@ internal sealed partial class ProgramBinder
     // The built-in types and the structs of this file.
     private TypeSymbol? LookupType(string name) =>
         LookupPrimitive(name) ?? (name == "Self" ? _selfType : _structs.GetValueOrDefault(name)) ??
-        (_aliasDeclarations.ContainsKey(name) ? ResolveAlias(name) : null);
+        (_aliasDeclarations.ContainsKey(name) ? ResolveAlias(name) : null) ??
+        (_unionDeclarations.ContainsKey(name) ? ResolveUnion(name) : null);
 
     private static TypeSymbol? LookupPrimitive(string name) => name switch
     {

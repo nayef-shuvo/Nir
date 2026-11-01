@@ -5,7 +5,7 @@ namespace Nir.Compiler.Semantics;
 /// <summary>Base of the bound tree: the typed, name-resolved form of the syntax tree that Emit reads.</summary>
 public abstract record BoundNode;
 
-public sealed record BoundProgram(ImmutableArray<StructTypeSymbol> Structs, ImmutableArray<BoundFunction> Functions, UserFunctionSymbol EntryPoint) : BoundNode;
+public sealed record BoundProgram(ImmutableArray<StructTypeSymbol> Structs, ImmutableArray<UnionTypeSymbol> Unions, ImmutableArray<BoundFunction> Functions, UserFunctionSymbol EntryPoint) : BoundNode;
 
 public sealed record BoundFunction(UserFunctionSymbol Symbol, BoundBlock Body) : BoundNode;
 
@@ -54,6 +54,19 @@ public sealed record BoundMemberCallExpression(BoundExpression Receiver, ClrMeth
 public sealed record BoundStructLiteral(StructTypeSymbol Struct, ImmutableArray<BoundFieldInitializer> Initializers) : BoundExpression(Struct);
 
 public sealed record BoundFieldInitializer(FieldSymbol Field, BoundExpression Value);
+
+/// <summary>A value of a member type turned into the union: the tag <paramref name="Index"/> and the value.</summary>
+public sealed record BoundUnionWrap(BoundExpression Value, UnionTypeSymbol Union, int Index) : BoundExpression(Union);
+
+/// <summary>
+/// <c>match</c> on a union. A statement match has <paramref name="Type"/> <c>()</c> and every arm has a <c>Body</c>; a match
+/// whose value is used has the common type of its arms and every arm has a <c>Value</c>.
+/// </summary>
+public sealed record BoundMatch(BoundExpression Scrutinee, UnionTypeSymbol Union, ImmutableArray<BoundMatchArm> Arms, TypeSymbol ResultType)
+    : BoundExpression(ResultType);
+
+/// <summary>An arm for the member with tag <paramref name="Index"/>. <paramref name="Variable"/> is null for a <c>_</c>.</summary>
+public sealed record BoundMatchArm(int Index, VariableSymbol? Variable, BoundBlock? Body, BoundExpression? Value);
 
 /// <summary>A tuple value built from its elements, which run left to right.</summary>
 public sealed record BoundTupleLiteral(TupleTypeSymbol Tuple, ImmutableArray<BoundExpression> Elements) : BoundExpression(Tuple);

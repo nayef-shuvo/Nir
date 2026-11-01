@@ -1,0 +1,25 @@
+type Shape = union { Circle, Square }
+type Circle = struct { r: int }
+type Square = struct { side: int }
+
+fn report(s: Shape) {
+    match s {
+        c: Circle => {
+            print("circle")
+            print(c.r)
+        }
+        _: Square => print("square")
+    }
+}
+
+fn size(s: Shape) -> int {
+    let n = match s { c: Circle => c.r, q: Square => q.side }
+    return n * 10
+}
+
+fn main() {
+    report(Circle { r = 7 })
+    report(Square { side = 1 })
+    print(size(Circle { r = 2 }))
+    print(size(Square { side = 3 }))
+}

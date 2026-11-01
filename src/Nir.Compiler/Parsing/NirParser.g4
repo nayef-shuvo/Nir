@@ -29,6 +29,7 @@ topLevelItem
     | functionDeclaration
     | structDeclaration
     | tupleAliasDeclaration
+    | unionDeclaration
     | implDeclaration
     ;
 
@@ -48,6 +49,15 @@ structField
 // `type Pair = (x: int, y: int)`: a name for a tuple type.
 tupleAliasDeclaration
     : TYPE name=IDENTIFIER EQ tupleType
+    ;
+
+// `type Shape = union { Circle, Square }`: members are separated by a comma or a newline.
+unionDeclaration
+    : TYPE name=IDENTIFIER EQ UNION LBRACE unionMember (separator unionMember)+ separator? RBRACE
+    ;
+
+unionMember
+    : type=typeSyntax
     ;
 
 // A type is a plain identifier or a tuple type. Which names are types is decided by the binder.
@@ -204,6 +214,10 @@ expression
     | left=expression op=AMPAMP right=expression                        # logicalAndExpression
     | left=expression op=PIPEPIPE right=expression                      # logicalOrExpression
     | callExpression                                                    # callExpr
+    | MATCH {_structLiteralsForbidden++;} scrutinee=expression {_structLiteralsForbidden--;} LBRACE
+      {_savedStructLiteralsForbidden.Push(_structLiteralsForbidden); _structLiteralsForbidden = 0;}
+      matchArm (separator matchArm)* separator?
+      {_structLiteralsForbidden = _savedStructLiteralsForbidden.Pop();} RBRACE                   # matchExpr
     | LPAREN {_savedStructLiteralsForbidden.Push(_structLiteralsForbidden); _structLiteralsForbidden = 0;}
       elements+=expression (COMMA elements+=expression)+ COMMA? {_structLiteralsForbidden = _savedStructLiteralsForbidden.Pop();} RPAREN   # tupleLiteralExpr
     | LPAREN {_savedStructLiteralsForbidden.Push(_structLiteralsForbidden); _structLiteralsForbidden = 0;}
@@ -217,6 +231,11 @@ expression
     | SELF                                                              # selfExpr
     | {_structLiteralsForbidden == 0}? typeName=IDENTIFIER LBRACE fieldInitializerList? RBRACE   # structLiteralExpr
     | IDENTIFIER                                                        # nameExpr
+    ;
+
+// `c: Circle => expression` or `c: Circle => { statements }`. The name may be `_` to drop the value.
+matchArm
+    : name=IDENTIFIER COLON type=typeSyntax FATARROW (body=block | value=expression)
     ;
 
 // `Point { x = 1, y = 2 }`: every field once, separated by commas or newlines.

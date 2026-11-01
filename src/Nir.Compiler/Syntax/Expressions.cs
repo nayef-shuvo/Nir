@@ -19,6 +19,12 @@ public sealed record FieldInitializer(Identifier Name, Expression Value, TextSpa
 /// <summary><c>(1, 2.5)</c>: two or more values.</summary>
 public sealed record TupleLiteralExpression(ImmutableArray<Expression> Elements, TextSpan Span) : Expression(Span);
 
+/// <summary><c>match value { name: Type => body, ... }</c>.</summary>
+public sealed record MatchExpression(Expression Scrutinee, ImmutableArray<MatchArm> Arms, TextSpan Span) : Expression(Span);
+
+/// <summary>One case of a match. Exactly one of <paramref name="Block"/> and <paramref name="Value"/> is set.</summary>
+public sealed record MatchArm(Identifier Name, TypeSyntax Type, Block? Block, Expression? Value, TextSpan Span) : SyntaxNode(Span);
+
 /// <summary><c>receiver.field</c>. For a tuple the "field" is an index such as <c>0</c>, or the name of an element.</summary>
 public sealed record FieldAccessExpression(Expression Receiver, Identifier Field, TextSpan Span) : Expression(Span);
 

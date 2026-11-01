@@ -1,0 +1,4 @@
+type A = union { int, string }
+type B = union { A, bool }
+fn main() {
+}

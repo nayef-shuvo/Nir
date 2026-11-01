@@ -7,6 +7,7 @@ public sealed record CompilationUnit(
     ImmutableArray<UsingDirective> Usings,
     ImmutableArray<StructDeclaration> Structs,
     ImmutableArray<TupleAliasDeclaration> TupleAliases,
+    ImmutableArray<UnionDeclaration> Unions,
     ImmutableArray<ImplDeclaration> Impls,
     ImmutableArray<FunctionDeclaration> Functions,
     TextSpan Span) : SyntaxNode(Span);
@@ -18,6 +19,9 @@ public sealed record FieldDeclaration(Identifier Name, TypeSyntax Type, TextSpan
 
 /// <summary><c>type Pair = (x: int, y: int)</c>: a name for a tuple type.</summary>
 public sealed record TupleAliasDeclaration(Identifier Name, TupleTypeSyntax Type, TextSpan Span) : SyntaxNode(Span);
+
+/// <summary><c>type Shape = union { Circle, Square }</c>: a value that is one of two or more types.</summary>
+public sealed record UnionDeclaration(Identifier Name, ImmutableArray<TypeSyntax> Members, TextSpan Span) : SyntaxNode(Span);
 
 /// <summary><c>Name impl { fn ... }</c>: the methods and associated functions of a struct.</summary>
 public sealed record ImplDeclaration(Identifier TypeName, ImmutableArray<FunctionDeclaration> Methods, TextSpan Span) : SyntaxNode(Span);

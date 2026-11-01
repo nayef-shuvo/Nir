@@ -1,0 +1,5 @@
+// Expect: NIR3001 "cannot convert 'double' to 'Value'" on line 4.
+type Value = union { int, string }
+fn main() {
+    let v: Value = 2.5
+}

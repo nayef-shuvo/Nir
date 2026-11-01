@@ -48,8 +48,14 @@ public static class DiagnosticCodes
     /// <summary>A tuple type where some elements have names and others do not, or two have the same name.</summary>
     public const string InconsistentTupleNames = "NIR2019";
 
-    /// <summary>A type alias that refers to itself.</summary>
+    /// <summary>A type alias or union that refers to itself.</summary>
     public const string RecursiveAlias = "NIR2020";
+
+    /// <summary>A union that lists the same type twice.</summary>
+    public const string DuplicateUnionMember = "NIR2021";
+
+    /// <summary>A union member that is itself a union.</summary>
+    public const string NestedUnion = "NIR2022";
 
     /// <summary>A name declared twice in the same block.</summary>
     public const string AlreadyDeclared = "NIR2005";
@@ -89,6 +95,21 @@ public static class DiagnosticCodes
 
     /// <summary>A borrow of something that is not a struct.</summary>
     public const string BorrowOfNonStruct = "NIR3017";
+
+    /// <summary><c>match</c> on a value that is not a union.</summary>
+    public const string MatchOnNonUnion = "NIR3018";
+
+    /// <summary>A match arm whose type is not a member of the union.</summary>
+    public const string UnknownMatchCase = "NIR3019";
+
+    /// <summary>Two match arms for the same member.</summary>
+    public const string DuplicateMatchCase = "NIR3020";
+
+    /// <summary>A match that leaves out a member of the union.</summary>
+    public const string NonExhaustiveMatch = "NIR3021";
+
+    /// <summary>A block as an arm of a match whose value is used.</summary>
+    public const string BlockArmInValueMatch = "NIR3022";
 
     /// <summary>A struct used inside <c>{ }</c> of an interpolated string.</summary>
     public const string StructInInterpolation = "NIR3016";

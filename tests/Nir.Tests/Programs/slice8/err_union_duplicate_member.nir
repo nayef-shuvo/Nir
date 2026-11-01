@@ -1,0 +1,3 @@
+type U = union { int, string, int }
+fn main() {
+}

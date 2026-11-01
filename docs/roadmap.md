@@ -952,9 +952,47 @@ Tasks: `T8a.0` syntax (types, literals, index, destructuring, alias), `T8a.1` bi
 `T8a.2` emit (`ValueTuple`, structs inside tuples), `T8a.3` tests (parser, binder, end to end, `Programs/slice8/`), samples, docs.
 All ticked. Any number of elements (nested `ValueTuple.Rest`). Left for later: `==` and printing of tuples, borrows of tuples.
 
-**Slice 8b: unions and `match`.** Decisions D-064, D-065. `type Shape = union { Circle, Square }` over any Nir type, tagged-struct
-Emit, implicit conversion of a member value to the union at assignment, argument and return, `match` as statement and
-expression with exhaustiveness checking. Design section 11. Tasks `T8b.x` are written when this slice starts.
+**Slice 8b: unions and `match`** (done). Decisions D-064, D-065, D-067 to D-071; design.md sections 2 and 11.
+
+```
+type Circle = struct { r: double }
+type Square = struct { side: double }
+type Shape = union { Circle, Square }
+
+fn area(s: Shape) -> double {
+    return match s {
+        c: Circle => 3.0 * c.r * c.r,
+        q: Square => q.side * q.side,
+    }
+}
+
+fn main() {
+    let s: Shape = Circle { r = 2.0 }      // a member converts to the union where a union is expected
+    print(area(s))
+    match s {
+        c: Circle => print("circle")
+        _: Square => { print("square") }
+    }
+}
+```
+
+Tasks:
+
+- [x] **T8b.0 Syntax.** Tokens `union`, `match`, `=>`; `type X = union { A, B }` (two or more members, each a type);
+  `match scrutinee { name: Type => expression-or-block, ... }` as an expression (arms separated by comma or newline; the
+  scrutinee is parsed with struct literals forbidden like an `if` head). AST `UnionDeclaration`, `MatchExpression`, `MatchArm`.
+  Parser tests; `AstFormatter`.
+- [x] **T8b.1 Binder.** `UnionTypeSymbol` (nominal, members in order); union names resolved lazily like aliases, with the same cycle
+  check; members: no duplicates, no unions, no `()`. Implicit conversion of a member value to the union at `let` with annotation,
+  assignment, `return`, call arguments, struct literal fields (`BoundUnionWrap`). `match`: scrutinee must be a union; each arm names
+  a member type; every member exactly once; arms of a value-match are expressions of one type; statement-match arms may be blocks;
+  arm variable immutable, `_` drops it; `return` analysis through a match whose arms all return. Unions cannot be compared,
+  printed, interpolated, borrowed or have members.
+- [x] **T8b.2 Emit.** A union is a public sealed CLR value type with an `int Tag` and one field per member (a tagged struct, so
+  nothing is boxed); wrapping sets tag and field; `match` stores the scrutinee, tests the tag per arm, loads the arm variable from the
+  member field. Unions inside tuples work like structs inside tuples.
+- [x] **T8b.3 Tests and docs.** Parser, binder and end-to-end tests; `Programs/slice8/`; `samples/unions.nir` and error samples;
+  `architecture.md`, `CLAUDE.md`, memory.
 
 **Slice 9: errors.** `type E = error {...}`, `E!T`, `anyerror`, `error` keyword, `try`, `catch`, `fn main() -> anyerror!`,
 C# exceptions wrapped as `anyerror` under `try`. Design section 10.

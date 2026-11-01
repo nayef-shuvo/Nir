@@ -23,7 +23,9 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
 
         // Pass 0: the structs, so functions and bodies can use them wherever they are declared.
         DeclareStructs(unit.Structs);
+        DeclareUnions(unit.Unions);
         DeclareTupleAliases(unit.TupleAliases);
+        ResolveUnions();
         ResolveStructFields();
 
         // Pass 1: declare every function, so a call may come before the declaration.
@@ -52,7 +54,7 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
             .Select(BindFunction)
             .ToImmutableArray();
 
-        return _hadError || entryPoint is null ? null : new BoundProgram([.. _structs.Values], functions, entryPoint);
+        return _hadError || entryPoint is null ? null : new BoundProgram([.. _structs.Values], [.. _unionOrder], functions, entryPoint);
     }
 
     // Resolves a function's signature. This happens for every function before any body is bound.
@@ -144,6 +146,7 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
 
     private BoundStatement BindStatement(Statement statement) => statement switch
     {
+        ExpressionStatement { Expression: MatchExpression match } => new BoundExpressionStatement(BindMatch(match, isStatement: true)),
         ExpressionStatement s => new BoundExpressionStatement(BindExpression(s.Expression)),
         VariableDeclaration d => BindVariableDeclaration(d),
         DestructuringDeclaration d => BindDestructuring(d),

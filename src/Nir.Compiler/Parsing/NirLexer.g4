@@ -26,12 +26,15 @@ CONTINUE: 'continue';
 AS: 'as';
 TYPE: 'type';
 STRUCT: 'struct';
+UNION: 'union';
+MATCH: 'match';
 IMPL: 'impl';
 SELF: 'self';
 TRUE: 'true';
 FALSE: 'false';
 
 ARROW: '->';
+FATARROW: '=>';
 DOTDOTEQ: '..=';
 DOTDOT: '..';
 AMPAMP: '&&';

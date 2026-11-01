@@ -40,6 +40,12 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
             .Select(BuildTupleAlias)
             .OfType<TupleAliasDeclaration>()
             .ToImmutableArray();
+        var unions = items
+            .Select(item => item.unionDeclaration())
+            .OfType<NirParser.UnionDeclarationContext>()
+            .Select(BuildUnion)
+            .OfType<UnionDeclaration>()
+            .ToImmutableArray();
         var impls = items
             .Select(item => item.implDeclaration())
             .OfType<NirParser.ImplDeclarationContext>()
@@ -47,7 +53,7 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
             .OfType<ImplDeclaration>()
             .ToImmutableArray();
 
-        return new CompilationUnit(usings, structs, aliases, impls, functions, new TextSpan(0, source.Text.Length));
+        return new CompilationUnit(usings, structs, aliases, unions, impls, functions, new TextSpan(0, source.Text.Length));
     }
 
     private static StructDeclaration? BuildStruct(NirParser.StructDeclarationContext context)
@@ -72,6 +78,13 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         var name = BuildIdentifier(context.name);
         var type = BuildTupleType(context.tupleType());
         return name is null || type is null ? null : new TupleAliasDeclaration(name, type, SpanOf(context));
+    }
+
+    private static UnionDeclaration? BuildUnion(NirParser.UnionDeclarationContext context)
+    {
+        var name = BuildIdentifier(context.name);
+        var members = context.unionMember().Select(member => BuildTypeSyntax(member.type)).ToList();
+        return name is null || members.Any(m => m is null) ? null : new UnionDeclaration(name, [.. members.OfType<TypeSyntax>()], SpanOf(context));
     }
 
     private static TypeSyntax? BuildTypeSyntax(NirParser.TypeSyntaxContext? context)
@@ -385,6 +398,7 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         NirParser.FieldAccessExpressionContext f => BuildFieldAccess(f),
         NirParser.TupleIndexExpressionContext t => BuildExpression(t.receiver) is { } receiver && !IsMissing(t.index) ? AddFieldAccesses(receiver, t.index) : null,
         NirParser.TupleLiteralExprContext t => BuildTupleLiteral(t),
+        NirParser.MatchExprContext m => BuildMatch(m),
         NirParser.ReferenceExpressionContext r => BuildReference(r),
         NirParser.SelfExprContext s => new SelfExpression(SpanOf(s)),
         NirParser.StructLiteralExprContext l => BuildStructLiteral(l),
@@ -450,6 +464,24 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         var receiver = BuildExpression(context.receiver);
         var field = BuildIdentifier(context.field);
         return receiver is null || field is null ? null : new FieldAccessExpression(receiver, field, SpanOf(context));
+    }
+
+    private MatchExpression? BuildMatch(NirParser.MatchExprContext context)
+    {
+        var scrutinee = BuildExpression(context.scrutinee);
+        var arms = context.matchArm().Select(BuildMatchArm).ToList();
+        return scrutinee is null || arms.Count == 0 || arms.Any(a => a is null)
+            ? null
+            : new MatchExpression(scrutinee, [.. arms.OfType<MatchArm>()], SpanOf(context));
+    }
+
+    private MatchArm? BuildMatchArm(NirParser.MatchArmContext context)
+    {
+        var name = BuildIdentifier(context.name);
+        var type = BuildTypeSyntax(context.type);
+        var block = context.body is null ? null : BuildBlock(context.body);
+        var value = context.value is null ? null : BuildExpression(context.value);
+        return name is null || type is null || (block is null && value is null) ? null : new MatchArm(name, type, block, value, SpanOf(context));
     }
 
     private TupleLiteralExpression? BuildTupleLiteral(NirParser.TupleLiteralExprContext context)

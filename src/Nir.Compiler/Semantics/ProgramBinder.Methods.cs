@@ -87,7 +87,7 @@ internal sealed partial class ProgramBinder
             return new BoundErrorExpression();
         }
 
-        if (!CheckUserCallArguments(call.Span, $"{owner.Name}.{name}", call.Arguments, method, arguments))
+        if (CheckUserCallArguments(call.Span, $"{owner.Name}.{name}", call.Arguments, method, arguments) is not { } checkedArguments)
         {
             return new BoundErrorExpression();
         }
@@ -97,7 +97,7 @@ internal sealed partial class ProgramBinder
             return new BoundErrorExpression();
         }
 
-        return new BoundMethodCall(receiver, method, arguments);
+        return new BoundMethodCall(receiver, method, checkedArguments);
     }
 
     // A `&mut self` method changes its receiver, so the receiver must be a mutable place, not a temporary copy.
@@ -140,14 +140,15 @@ internal sealed partial class ProgramBinder
             return new BoundErrorExpression();
         }
 
-        return CheckUserCallArguments(call.Span, $"{owner.Name}::{name.Text}", call.Arguments, method, arguments)
-            ? new BoundCallExpression(method, arguments)
+        return CheckUserCallArguments(call.Span, $"{owner.Name}::{name.Text}", call.Arguments, method, arguments) is { } checkedArguments
+            ? new BoundCallExpression(method, checkedArguments)
             : new BoundErrorExpression();
     }
 
-    // Arity and exact argument types for a call of a function or method written in Nir. A wrong argument type is reported
-    // but the call still has its result type; a wrong count has no meaningful result, so the call is an error.
-    private bool CheckUserCallArguments(
+    // Arity and argument types for a call of a function or method written in Nir; returns the arguments as the parameters
+    // take them (a member passed for a union parameter is wrapped). A wrong argument type is reported but the call still has
+    // its result type; a wrong count has no meaningful result, so the result is null and the call is an error.
+    private ImmutableArray<BoundExpression>? CheckUserCallArguments(
         TextSpan callSpan,
         string displayName,
         ImmutableArray<Expression> argumentSyntax,
@@ -157,20 +158,30 @@ internal sealed partial class ProgramBinder
         if (arguments.Length != target.ParameterTypes.Length)
         {
             ReportWrongArgumentCount(callSpan, displayName, target.ParameterTypes.Length, arguments.Length);
-            return false;
+            return null;
         }
 
+        var result = arguments.ToBuilder();
         for (var i = 0; i < arguments.Length; i++)
         {
             var argumentType = arguments[i].Type;
             var parameterType = target.ParameterTypes[i];
-            if (argumentType != TypeSymbol.ErrorType && parameterType != TypeSymbol.ErrorType && !ArgumentFits(argumentType, parameterType))
+            if (argumentType == TypeSymbol.ErrorType || parameterType == TypeSymbol.ErrorType || ArgumentFits(argumentType, parameterType))
+            {
+                continue;
+            }
+
+            if (Convert(arguments[i], parameterType) is { } converted)
+            {
+                result[i] = converted;
+            }
+            else
             {
                 Error(DiagnosticCodes.TypeMismatch, MismatchMessage(argumentType, parameterType), argumentSyntax[i].Span);
             }
         }
 
-        return true;
+        return result.ToImmutable();
     }
 
     // "cannot <action> because ...": a plain variable is not `mut`; a borrow is read-only.

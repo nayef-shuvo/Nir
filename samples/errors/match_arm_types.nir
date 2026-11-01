@@ -1,0 +1,6 @@
+// Expect: NIR3001 "the arms of a match must all have the same type..." on line 5.
+type Value = union { int, string }
+fn main() {
+    let v: Value = 1
+    let n = match v { i: int => 1, s: string => "text" }
+}

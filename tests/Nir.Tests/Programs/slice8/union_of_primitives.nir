@@ -1,0 +1,20 @@
+type Value = union { int, string, bool, (int, int) }
+
+fn describe(v: Value) -> string {
+    match v {
+        n: int => { return $"int {n}" }
+        s: string => { return "string " + s }
+        b: bool => { return $"bool {b}" }
+        p: (int, int) => { return $"pair {p.0},{p.1}" }
+    }
+}
+
+fn main() {
+    print(describe(42))
+    print(describe("hi"))
+    print(describe(true))
+    print(describe((1, 2)))
+    let mut v: Value = 1
+    v = "changed"
+    print(describe(v))
+}

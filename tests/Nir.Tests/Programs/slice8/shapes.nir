@@ -1,0 +1,25 @@
+type Circle = struct { r: double }
+type Square = struct { side: double }
+type Shape = union { Circle, Square }
+
+fn area(s: Shape) -> double {
+    return match s {
+        c: Circle => 3.0 * c.r * c.r,
+        q: Square => q.side * q.side,
+    }
+}
+
+fn make(round: bool) -> Shape {
+    if round {
+        return Circle { r = 1.0 }
+    }
+    return Square { side = 4.0 }
+}
+
+fn main() {
+    let s: Shape = Circle { r = 2.0 }
+    print(area(s))
+    print(area(Square { side = 3.0 }))
+    print(area(make(true)))
+    print(area(make(false)))
+}

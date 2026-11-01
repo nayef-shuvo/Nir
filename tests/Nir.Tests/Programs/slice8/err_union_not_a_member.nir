@@ -1,0 +1,4 @@
+type U = union { int, string }
+fn main() {
+    let u: U = 2.5
+}

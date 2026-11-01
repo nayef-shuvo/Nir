@@ -27,7 +27,10 @@ public static class Emitter
         var type = module.DefineType("Program", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
 
         var context = new EmitContext();
-        DefineStructs(program, module, context);
+        DefineStructTypes(program, module, context);
+        DefineUnionTypes(program, module, context);
+        DefineStructFields(program, context);
+        DefineUnionFields(program, context);
 
         // Free functions are static methods of Program. A struct's methods live on the struct: an instance method (the receiver
         // is the CLR `this`, a managed pointer to the struct) when it has `&self` / `&mut self`, otherwise a static method.
@@ -63,6 +66,11 @@ public static class Emitter
             structType.CreateType();
         }
 
+        foreach (var union in context.Unions.Values)
+        {
+            union.Type.CreateType();
+        }
+
         var metadata = assemblyBuilder.GenerateMetadata(out var ilStream, out var fieldData);
         var peBuilder = new ManagedPEBuilder(
             header: new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage),
@@ -81,8 +89,9 @@ public static class Emitter
         RuntimeConfigWriter.Write(Path.Combine(outputDirectory, assemblyName + ".runtimeconfig.json"));
     }
 
-    // Each struct is a public sealed CLR value type with public fields, so C# can see it.
-    private static void DefineStructs(BoundProgram program, ModuleBuilder module, EmitContext context)
+    // Each struct is a public sealed CLR value type with public fields, so C# can see it. All the types are defined before any
+    // field, because a field may be of a struct, union or tuple that is declared further down.
+    private static void DefineStructTypes(BoundProgram program, ModuleBuilder module, EmitContext context)
     {
         var valueType = ClrUniverse.CoreType("System.ValueType");
         foreach (var structSymbol in program.Structs)
@@ -92,13 +101,43 @@ public static class Emitter
                 TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.SequentialLayout,
                 valueType);
         }
+    }
 
+    private static void DefineStructFields(BoundProgram program, EmitContext context)
+    {
         foreach (var structSymbol in program.Structs)
         {
             foreach (var field in structSymbol.Fields)
             {
                 context.Fields[field] = context.Structs[structSymbol].DefineField(field.Name, context.ClrOf(field.Type), FieldAttributes.Public);
             }
+        }
+    }
+
+    // A union is a tagged value type: an `int` saying which member it holds, and a field for each member. Nothing is boxed.
+    private static void DefineUnionTypes(BoundProgram program, ModuleBuilder module, EmitContext context)
+    {
+        var valueType = ClrUniverse.CoreType("System.ValueType");
+        foreach (var union in program.Unions)
+        {
+            var type = module.DefineType(
+                union.Name,
+                TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.SequentialLayout,
+                valueType);
+            context.Unions[union] = new UnionLayout(type, null!, null!);
+        }
+    }
+
+    private static void DefineUnionFields(BoundProgram program, EmitContext context)
+    {
+        foreach (var union in program.Unions)
+        {
+            var type = context.Unions[union].Type;
+            var tag = type.DefineField("Tag", ClrUniverse.CoreType("System.Int32"), FieldAttributes.Public);
+            var cases = union.Members
+                .Select((member, i) => type.DefineField("Case" + i, context.ClrOf(member), FieldAttributes.Public))
+                .ToArray();
+            context.Unions[union] = new UnionLayout(type, tag, cases);
         }
     }
 
@@ -268,6 +307,14 @@ public static class Emitter
                     EmitStructLiteral(structLiteral);
                     break;
 
+                case BoundUnionWrap wrap:
+                    EmitUnionWrap(wrap);
+                    break;
+
+                case BoundMatch match:
+                    EmitMatch(match);
+                    break;
+
                 case BoundTupleLiteral tupleLiteral:
                     EmitTupleLiteral([.. tupleLiteral.Tuple.Elements.Select(element => element.Type)], tupleLiteral.Elements);
                     break;
@@ -386,6 +433,85 @@ public static class Emitter
                     il.Emit(OpCodes.Stloc, temporary);
                     il.Emit(OpCodes.Ldloca, temporary);
                     break;
+            }
+        }
+
+        // Build in a temporary like a struct literal: zero it, store the tag and the value, load the finished union.
+        private void EmitUnionWrap(BoundUnionWrap wrap)
+        {
+            var layout = context.Unions[wrap.Union];
+            var temporary = il.DeclareLocal(layout.Type);
+
+            il.Emit(OpCodes.Ldloca, temporary);
+            il.Emit(OpCodes.Initobj, layout.Type);
+            il.Emit(OpCodes.Ldloca, temporary);
+            il.Emit(OpCodes.Ldc_I4, wrap.Index);
+            il.Emit(OpCodes.Stfld, layout.Tag);
+            il.Emit(OpCodes.Ldloca, temporary);
+            EmitExpression(wrap.Value);
+            il.Emit(OpCodes.Stfld, layout.Cases[wrap.Index]);
+            il.Emit(OpCodes.Ldloc, temporary);
+        }
+
+        // The union is stored once. Each arm tests the tag; the last needs no test because the binder checked that the arms
+        // cover every member. The value of a value-match goes through a local so the stack is the same on every path.
+        private void EmitMatch(BoundMatch match)
+        {
+            var layout = context.Unions[match.Union];
+            EmitExpression(match.Scrutinee);
+            var scrutinee = il.DeclareLocal(layout.Type);
+            il.Emit(OpCodes.Stloc, scrutinee);
+
+            var result = match.ResultType == TypeSymbol.UnitType ? null : il.DeclareLocal(context.ClrOf(match.ResultType));
+            var end = il.DefineLabel();
+            for (var i = 0; i < match.Arms.Length; i++)
+            {
+                var arm = match.Arms[i];
+                var next = il.DefineLabel();
+                if (i < match.Arms.Length - 1)
+                {
+                    il.Emit(OpCodes.Ldloca, scrutinee);
+                    il.Emit(OpCodes.Ldfld, layout.Tag);
+                    il.Emit(OpCodes.Ldc_I4, arm.Index);
+                    il.Emit(OpCodes.Bne_Un, next);
+                }
+
+                if (arm.Variable is { } variable)
+                {
+                    var local = il.DeclareLocal(context.ClrOf(variable.Type));
+                    _locals[variable] = local;
+                    il.Emit(OpCodes.Ldloca, scrutinee);
+                    il.Emit(OpCodes.Ldfld, layout.Cases[arm.Index]);
+                    il.Emit(OpCodes.Stloc, local);
+                }
+
+                if (arm.Value is { } value)
+                {
+                    EmitExpression(value);
+                    if (result is not null)
+                    {
+                        il.Emit(OpCodes.Stloc, result);
+                    }
+                }
+                else
+                {
+                    EmitBlock(arm.Body!);
+                }
+
+                // An arm that always returns has nothing to jump over; leaving the jump out also keeps a function that ends
+                // with such a match from having a jump target past its last instruction.
+                if (arm.Body is null || !BoundFlow.AlwaysReturns(arm.Body))
+                {
+                    il.Emit(OpCodes.Br, end);
+                }
+
+                il.MarkLabel(next);
+            }
+
+            il.MarkLabel(end);
+            if (result is not null)
+            {
+                il.Emit(OpCodes.Ldloc, result);
             }
         }
 

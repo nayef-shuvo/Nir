@@ -176,11 +176,18 @@ Codes defined so far (slices 1 to 7; the message text in `DiagnosticCodes` call 
 | NIR2017 | field missing from a struct literal | `missing field '{name}' in '{struct}'` |
 | NIR2018 | `self` outside a method | `'self' can only be used inside a method` |
 | NIR2019 | tuple type with some elements named and some not | `either every element of a tuple type has a name or none does` |
-| NIR2020 | tuple alias defined in terms of itself | `type '{name}' is defined in terms of itself` |
+| NIR2020 | tuple alias or union defined in terms of itself | `type '{name}' is defined in terms of itself` |
+| NIR2021 | union lists the same type twice | `'{type}' is listed twice in union '{name}'` |
+| NIR2022 | union member is a union | `a union cannot contain another union ('{name}') yet; list its members instead` |
 | NIR3013 | `&mut self` method called on a temporary | `cannot call '{method}' on a temporary because it changes its receiver` |
 | NIR3014 | borrow anywhere but a direct argument to a Nir function or method | `a borrow can only be passed directly as an argument to a function or method written in Nir` |
 | NIR3015 | borrow of something other than a whole variable | `only a whole variable can be borrowed, not a field or another expression` |
 | NIR3016 | struct or tuple inside `{ }` of an interpolated string | `cannot put a value of type '{type}' in an interpolated string; use its fields` (tuples: `elements`) |
+| NIR3018 | `match` on a value that is not a union | `cannot match on a value of type '{type}'; only a union can be matched` |
+| NIR3019 | match arm type is not a member | `'{type}' is not one of the cases of '{union}'` |
+| NIR3020 | two arms for one member | `case '{type}' is already handled by an earlier arm` |
+| NIR3021 | match leaves out members | `match on '{union}' does not cover '{a}', '{b}'` |
+| NIR3022 | block arm in a match whose value is used | `a match whose value is used needs an expression in every arm; use it as a statement to have blocks` |
 | NIR3017 | borrow of a non-struct | `cannot borrow a value of type '{type}': only structs can be borrowed for now` |
 
 ## 5. Parsing (`Nir.Compiler.Parsing`)
@@ -455,6 +462,22 @@ places, method and associated calls) and `.Borrows.cs` (borrow parameter types, 
   `BindTupleLiteral`, `BindDestructuring`. A struct cycle through a tuple is found by `FindCycle` via `StructsInside`.
 - Bound nodes: `BoundTupleLiteral`, `BoundDestructuring(Variables, Initializer, Tuple)` (a `null` variable is a `_`).
 
+### Slice 8b additions: unions and match
+
+- Syntax. Keywords `union` and `match`, token `=>`. `UnionDeclaration(Name, Members)`, `MatchExpression(Scrutinee, Arms)`,
+  `MatchArm(Name, Type, Block | Value)`. `match` is an ordinary expression in the grammar (its scrutinee is parsed with struct
+  literals forbidden, its arms with them allowed again); the binder decides from the position whether it is a statement
+  (`ExpressionStatement` whose expression is a `MatchExpression`) or a value.
+- `UnionTypeSymbol` is nominal (one symbol per declaration) with its `Members`; the tag of a member is its position.
+  `ProgramBinder.Unions.cs`: names are registered first (`DeclareUnions`), members are resolved on first use (`ResolveUnion`, with the
+  same self-reference check as aliases), then `Convert(value, expected)` is the single place where a member becomes a union
+  (`BoundUnionWrap`). It is used by `let` with an annotation, assignment, `return`, call arguments
+  (`CheckUserCallArguments` now returns the converted arguments), struct literal fields and field assignment.
+- `BindMatch`: scrutinee must be a union; each arm resolves its type and finds the member index; unknown or repeated cases are
+  reported; the arm variable lives in a scope of its own; a value match checks one result type; missing members are reported
+  once. `BoundMatch` has a `Body` per arm for a statement and a `Value` per arm for a value. `BoundFlow.AlwaysReturns`
+  looks through a statement match whose arms all return.
+
 ## 8. Emit (`Nir.Compiler.Emit`)
 
 ```csharp
@@ -543,6 +566,18 @@ Emit never reports user errors. If something it cannot emit reaches it, that is 
 - When a tuple holds a struct (at any depth) the struct's `TypeBuilder` is a type argument. The load context's generic
   definition refuses that, so such tuples use the runtime's own `typeof(ValueTuple<,>)` definition, and members come from
   `TypeBuilder.GetField` / `TypeBuilder.GetConstructor`. Both definitions name the same type in System.Private.CoreLib.
+
+### Slice 8b additions: unions and match
+
+- A union is a public sealed value type with `int Tag` and one field `Case<i>` per member (`UnionLayout`). All struct and
+  union types are defined before any of their fields, because fields may use types declared later (also through tuples).
+  `ContainsStruct` in `EmitContext` counts unions too, so a tuple holding a union uses the runtime `ValueTuple` definition
+  like one holding a struct.
+- `BoundUnionWrap` builds a temporary: `initobj`, store tag, store the member field, `ldloc`. `BoundMatch` stores the scrutinee in a local;
+  each arm but the last tests the tag and jumps to the next arm when it differs (the last needs no test, the binder checked
+  that all members are covered); it loads the arm variable from the member field, runs its body or value, and jumps to the end.
+  A value match stores each arm's value in a result local so the stack is the same on every path. An arm that always returns gets
+  no jump, so a function that ends in such a match has no jump target past its last instruction.
 
 ## 9. Emit findings
 

@@ -31,6 +31,9 @@ internal static class AstFormatter
         FieldDeclaration f => $"FieldDecl {f.Name.Text}: {f.Type.Text}",
         TupleAliasDeclaration a => $"TupleAlias {a.Name.Text} = {a.Type.Text}",
         TupleLiteralExpression => "TupleLiteral",
+        UnionDeclaration u => $"Union {u.Name.Text} = {string.Join(" | ", u.Members.Select(m => m.Text))}",
+        MatchExpression => "Match",
+        MatchArm a => $"Arm {a.Name.Text}: {a.Type.Text}",
         DestructuringDeclaration d => "Destructuring " + string.Join(", ", d.Names.Select(n => (n.IsMutable ? "mut " : string.Empty) + n.Name.Text)),
         ImplDeclaration i => $"Impl {i.TypeName.Text}",
         StructLiteralExpression l => $"StructLiteral {l.TypeName.Text}",
@@ -117,8 +120,11 @@ internal static class AstFormatter
 
     private static IEnumerable<SyntaxNode> Children(SyntaxNode node) => node switch
     {
-        CompilationUnit u => u.Usings.Cast<SyntaxNode>().Concat(u.Structs).Concat(u.TupleAliases).Concat(u.Impls).Concat(u.Functions),
+        CompilationUnit u => u.Usings.Cast<SyntaxNode>().Concat(u.Structs).Concat(u.TupleAliases).Concat(u.Unions).Concat(u.Impls).Concat(u.Functions),
         TupleAliasDeclaration => [],
+        UnionDeclaration => [],
+        MatchExpression m => [m.Scrutinee, .. m.Arms],
+        MatchArm a => [a.Block is { } block ? block : a.Value!],
         TupleLiteralExpression t => t.Elements,
         DestructuringDeclaration d => [d.Initializer],
         StructDeclaration s => s.Fields,

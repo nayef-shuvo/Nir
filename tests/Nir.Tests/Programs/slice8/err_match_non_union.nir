@@ -1,0 +1,4 @@
+fn main() {
+    let n = 5
+    let x = match n { a: int => 1 }
+}

@@ -1,0 +1,8 @@
+// Expect: NIR3021 "match on 'Shape' does not cover 'Square'" on line 7.
+type Circle = struct { r: double }
+type Square = struct { side: double }
+type Shape = union { Circle, Square }
+fn main() {
+    let s: Shape = Circle { r = 1.0 }
+    let area = match s { c: Circle => c.r }
+}

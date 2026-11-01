@@ -44,7 +44,7 @@ internal sealed partial class ProgramBinder
             return "'Program' is reserved for the functions of the compiled program";
         }
 
-        if (_structs.ContainsKey(name) || _aliasDeclarations.ContainsKey(name))
+        if (_structs.ContainsKey(name) || _aliasDeclarations.ContainsKey(name) || _unionDeclarations.ContainsKey(name))
         {
             return $"type '{name}' is already defined";
         }
@@ -124,6 +124,7 @@ internal sealed partial class ProgramBinder
     {
         StructTypeSymbol structType => [structType],
         TupleTypeSymbol tuple => tuple.Elements.SelectMany(element => StructsInside(element.Type)),
+        UnionTypeSymbol union => union.Members.SelectMany(StructsInside),
         _ => [],
     };
 
@@ -135,7 +136,7 @@ internal sealed partial class ProgramBinder
             return symbol;
         }
 
-        if (LookupPrimitive(name.Text) is not null || _aliasDeclarations.ContainsKey(name.Text))
+        if (LookupPrimitive(name.Text) is not null || _aliasDeclarations.ContainsKey(name.Text) || _unionDeclarations.ContainsKey(name.Text))
         {
             Error(DiagnosticCodes.NotAStruct, $"'{name.Text}' is not a struct", name.Span);
         }
@@ -179,14 +180,14 @@ internal sealed partial class ProgramBinder
             {
                 failed = true;
             }
-            else if (field.Type != TypeSymbol.ErrorType && value.Type != field.Type)
+            else if ((field.Type == TypeSymbol.ErrorType ? value : Convert(value, field.Type)) is { } converted)
             {
-                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{field.Type}'", initializer.Value.Span);
-                failed = true;
+                initializers.Add(new BoundFieldInitializer(field, converted));
             }
             else
             {
-                initializers.Add(new BoundFieldInitializer(field, value));
+                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{field.Type}'", initializer.Value.Span);
+                failed = true;
             }
         }
 
@@ -239,9 +240,16 @@ internal sealed partial class ProgramBinder
             Error(DiagnosticCodes.NotMutable, NotMutableMessage($"assign to '{text}'", root), assignment.Target.Span);
         }
 
-        if (value.Type != TypeSymbol.ErrorType && access.Type != TypeSymbol.ErrorType && value.Type != access.Type)
+        if (value.Type != TypeSymbol.ErrorType && access.Type != TypeSymbol.ErrorType)
         {
-            Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{access.Type}'", assignment.Value.Span);
+            if (Convert(value, access.Type) is { } converted)
+            {
+                value = converted;
+            }
+            else
+            {
+                Error(DiagnosticCodes.TypeMismatch, $"cannot convert '{value.Type}' to '{access.Type}'", assignment.Value.Span);
+            }
         }
 
         return new BoundFieldAssignment(access, value);

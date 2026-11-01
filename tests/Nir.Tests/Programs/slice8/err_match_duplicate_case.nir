@@ -1,0 +1,5 @@
+type U = union { int, string }
+fn main() {
+    let u: U = 1
+    let n = match u { a: int => 1, b: int => 2, s: string => 3 }
+}

@@ -15,10 +15,13 @@ internal sealed class EmitContext
 
     public Dictionary<FieldSymbol, FieldBuilder> Fields { get; } = [];
 
+    public Dictionary<UnionTypeSymbol, UnionLayout> Unions { get; } = [];
+
     /// <summary>The CLR type for a Nir type. A struct's is the type the emitter defined for it, not something the symbol knows.</summary>
     public Type ClrOf(TypeSymbol type) => type switch
     {
         StructTypeSymbol structType => Structs[structType],
+        UnionTypeSymbol union => Unions[union].Type,
         BorrowTypeSymbol borrow => Structs[borrow.Element].MakeByRefType(), // a borrow is a CLR `ref`
         TupleTypeSymbol tuple => ValueTupleOf(tuple),
         _ => type.ClrType,
@@ -113,8 +116,11 @@ internal sealed class EmitContext
 
     private static bool ContainsStruct(TypeSymbol type) => type switch
     {
-        StructTypeSymbol => true,
+        StructTypeSymbol or UnionTypeSymbol => true,
         TupleTypeSymbol tuple => tuple.Elements.Any(element => ContainsStruct(element.Type)),
         _ => false,
     };
 }
+
+/// <summary>A union as the emitter defined it: a value type holding the tag of the current member and one field per member.</summary>
+internal sealed record UnionLayout(TypeBuilder Type, FieldBuilder Tag, FieldBuilder[] Cases);

@@ -483,6 +483,18 @@ public class LexerTests
     }
 
     [Fact]
+    public void Union_and_match_are_keywords_and_the_fat_arrow_is_one_token()
+    {
+        Assert.Equal("UNION MATCH FATARROW EQ EQEQ EOF", TokenFormatter.Names("union match => = =="));
+    }
+
+    [Fact]
+    public void A_fat_arrow_does_not_end_a_statement()
+    {
+        Assert.Equal("IDENTIFIER COLON IDENTIFIER FATARROW INT_LITERAL SEMI EOF", TokenFormatter.Names("a: A =>\n1"));
+    }
+
+    [Fact]
     public void Self_can_end_a_statement()
     {
         Assert.Equal("RETURN SELF SEMI IDENTIFIER SEMI EOF", TokenFormatter.Names("return self\nx"));

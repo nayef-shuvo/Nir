@@ -576,7 +576,7 @@ let text = try IO::File::ReadAllText(path)   // try: the exception becomes an an
 
 Unrecoverable failures (index out of range, null dereference) are not errors. They crash, like a panic.
 
-## 11. The kinds of types [union locked for v1, rest planned]
+## 11. The kinds of types [union and match done, rest planned]
 
 Every kind uses the same form: `type X = <shape>`.
 
@@ -593,7 +593,7 @@ type Point2D = (x: float, y: float)      // compiles to ValueTuple; names are co
 type Pair = (float, float)               // access as p.0 and p.1
 ```
 
-### Union [v1]
+### Union [done]
 
 A union is "one of these existing types". Syntax for now is the keyword form; `A | B` may be revisited.
 
@@ -604,13 +604,26 @@ type Shape = union { Circle, Square }
 
 fn area(s: Shape) -> double {
     match s {
-        c: Circle => 3.14159 * c.r * c.r,       // match syntax proposed
+        c: Circle => 3.14159 * c.r * c.r,
         q: Square => q.side * q.side,
     }
 }
 ```
 
 `match` must cover every case, or the compiler rejects it.
+
+Details (slice 8b, decisions D-067 to D-071):
+
+- A union has two or more members, each any Nir type (primitives, structs, tuples) but not `()` or another union. A repeated member is an error.
+  A union is its own type: two unions with the same members are different types.
+- A value of a member type converts to the union where a union is expected: `let s: Shape = Circle {..}`, assignment, `return`,
+  arguments of Nir functions and methods, struct literal fields. Not inside a tuple literal, not the other way round.
+- `match value { name: Type => body, ... }` is an expression. The arm variable is an immutable copy of the member, and `_` drops it.
+  Arms are separated by a comma or a newline. In statement position an arm may be a block `{ ... }` and arms may have different
+  types. As a value every arm is an expression and all have the same type. Every member exactly once; no wildcard arm.
+- `==`, `print`, interpolation, borrowing, methods and field access on a union are errors; use `match`.
+- A function whose last statement is a statement-`match` with every arm returning needs no final `return`.
+- Emitted as a value type with an `int Tag` and one field per member, so primitives are not boxed.
 
 `E!T` is shorthand for `union { E, T }` where `E` is an error and `T` is not. `?T` could likewise be
 `union { T, null }` [proposed]. The compiler emits a small tagged struct for `E!T` so success values are not boxed.

@@ -1,0 +1,5 @@
+type U = union { int, string }
+fn main() {
+    let a: U = 1
+    let same = a == a
+}
