@@ -10,6 +10,9 @@ internal static class GeneratedNames
 
     public const string AnyErrorMessage = "Message";
 
+    /// <summary>The built-in struct <c>std::types::TypeInfo</c>; in the <c>Nir</c> namespace so it never clashes with a type of the program.</summary>
+    public const string TypeInfoClass = "Nir.TypeInfo";
+
     /// <summary>The start of the name of a result type; a number follows.</summary>
     public const string ResultTypePrefix = "Nir.Result";
 

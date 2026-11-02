@@ -1112,6 +1112,35 @@ Additions made while building it (decision D-092): a tuple literal converted to 
 also type their literals; a .NET overload may be chosen through its literals; `try` on a conversion needs parentheses
 (`try (x as byte)`) because `try` binds tighter than `as`; a whole-number literal that wants a fraction type gets a hint in the error.
 
+**Slice 9d: knowing a type** (decisions D-093, D-094, D-096; design.md "Knowing a type: `typeof`"). **Done.**
+The run-time half, `std::types::runtime_type(x)` returning `RuntimeTypeInfo`, is a task of slice 11 (it needs `std`): union tag switch for
+unions and results, class name for `anyerror`, tests for each member, both states of `E!T`, two different errors, and a non-union.
+
+- [x] **T9d.1 Syntax**
+  - Keyword `typeof` in the lexer and parser; `TypeofExpression(operand)` in the AST where the operand is an expression
+    or a type (try the type first, then the expression); `AstBuilder`; friendly names in `ParserErrorListener`; `typeof`
+    must also be in the VS Code grammar (`VsCodeGrammarTests` checks every keyword).
+  - Tests: parser tests for a variable, an expression, a type name, a tuple type, a missing `)`.
+  - **Done when:** these pass.
+
+- [x] **T9d.2 `TypeInfo` and `typeof`**
+  - Built-in struct symbol `TypeInfo { name: string }` known to the binder (first reserved everywhere, then moved into `std::types`, T9d.4); the operand
+    is bound but not evaluated, the name text is the type's display text. As built there is no `BoundTypeof` node: `typeof` becomes a
+    `BoundStructLiteral` of a constant, so the emitter needed no change and `TypeInfo` is emitted (only when used) like any struct.
+  - Tests: every primitive, struct, tuple, union, result, `anyerror`, a type name, an expression with a side effect (must not run).
+  - **Done when:** these pass, and the operand is shown not to run.
+
+- [x] **T9d.3 Errors, programs, samples, docs**
+  - Diagnostics for: `typeof()` with no operand, `TypeInfo` declared by the user, a field that does not exist (`typeof(x).size`).
+    Golden programs in `Programs/slice9d/`, a sample `samples/typeof.nir`, `architecture.md`, `code-map.md`, `CLAUDE.md` status, `handoff.md`.
+  - **Done when:** all of the above pass, a clean rebuild has 0 warnings, `dotnet test` is green.
+
+- [x] **T9d.4 `TypeInfo` lives in `std::types` (D-097)**
+  - `using std::types::TypeInfo` / `std::types::{TypeInfo}` (a hard-coded table until slice 11); `typeof(x).name` needs no import; the name is
+    otherwise unknown with a hint; the built-in struct is emitted as `Nir.TypeInfo`; a file may declare its own `TypeInfo`.
+  - Tests: both import forms, no import, bad `std` paths, duplicate import, clash with a declared `TypeInfo`, own `TypeInfo` next to the built-in one.
+  - **Done when:** these pass.
+
 **Slice 10: heap references.** `&T`, `&mut T`, `&T {...}`, `&` of a variable (hoisted to a `Ref<T>`), `?T`, null. Design
 sections 3, 4, 6, 7.
 

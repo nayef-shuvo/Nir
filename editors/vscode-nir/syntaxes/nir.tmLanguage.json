@@ -317,6 +317,10 @@
           "match": "\\b(as)\\b"
         },
         {
+          "name": "keyword.operator.typeof.nir",
+          "match": "\\b(typeof)\\b"
+        },
+        {
           "name": "variable.language.self.nir",
           "match": "\\bself\\b"
         }

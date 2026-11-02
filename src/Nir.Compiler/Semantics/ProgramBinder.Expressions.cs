@@ -33,6 +33,7 @@ internal sealed partial class ProgramBinder
         FieldAccessExpression f => BindFieldAccess(f),
         InterpolatedStringExpression i => BindInterpolated(i),
         CastExpression c => BindCast(c),
+        TypeofExpression t => BindTypeof(t),
         ParenthesizedExpression p => BindExpression(p.Inner),
         UnaryExpression u => BindUnary(u),
         BinaryExpression b => BindBinary(b),

@@ -22,7 +22,7 @@ internal sealed partial class ProgramBinder
 
         if (LookupType(reference.Name.Text) is null)
         {
-            Error(DiagnosticCodes.UnknownType, $"unknown type '{reference.Name.Text}'", reference.Name.Span);
+            Error(DiagnosticCodes.UnknownType, UnknownTypeMessage(reference.Name.Text), reference.Name.Span);
         }
         else
         {

@@ -1,0 +1,43 @@
+numbers
+byte
+sbyte
+short
+ushort
+int
+uint
+long
+ulong
+float
+double
+decimal
+other primitives
+char
+bool
+string
+variables and expressions
+long
+long
+bool
+byte
+int
+aggregates
+Point
+long
+(int, string)
+int
+(long, (int, string))
+&Point
+declared, not stored
+Shape
+Failure!int
+anyerror
+type names
+int
+Point
+Failure!int
+(int, string)
+the result is a value
+  info.name = long
+  info.name = string
+  info.name = made by hand
+TypeInfo

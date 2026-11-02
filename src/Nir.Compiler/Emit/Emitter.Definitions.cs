@@ -70,14 +70,14 @@ public static partial class Emitter
             if (structSymbol.IsError)
             {
                 // An error is a class that derives from AnyError, so every error can be used as an anyerror.
-                var errorClass = module.DefineType(structSymbol.Name, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class, context.AnyError);
+                var errorClass = module.DefineType(structSymbol.ClrName, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class, context.AnyError);
                 context.Structs[structSymbol] = errorClass;
                 context.ErrorConstructors[structSymbol] = DefineConstructor(errorClass, context.AnyErrorConstructor);
                 continue;
             }
 
             context.Structs[structSymbol] = module.DefineType(
-                structSymbol.Name,
+                structSymbol.ClrName,
                 TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.SequentialLayout,
                 valueType);
         }

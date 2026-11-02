@@ -223,6 +223,41 @@ print($"{c} {next} {c < next}")           // a b True
 - A `char` can be printed, put in `{ }` of an interpolated string (its text is the character), be a parameter, result, struct field, tuple
   element or union member, and be the bounds of a range (`for c in 'a'..='z'`).
 
+### Knowing a type: `typeof` [locked, `typeof` built in slice 9d: D-093, D-094, D-097; `std::types::runtime_type` waits for slice 11: D-096]
+
+```
+using std::types::TypeInfo             // only needed to write the name TypeInfo, see below
+
+let total = 5_long
+let info = typeof(total)               // TypeInfo, worked out while compiling
+print(info.name)                       // long
+print(typeof(total + 1).name)          // long: any expression, and it is not evaluated
+print(typeof((int, string)).name)      // (int, string): a type name also works
+
+let s: Shape = Circle { r = 2.0 }
+print(typeof(s).name)                  // Shape: the declared type
+print(std::types::runtime_type(s).name)   // Circle: the member stored right now (slice 11, needs std)
+```
+
+- `typeof(e)` is a special form. `e` is an expression or a type name; it is never evaluated (no side effects, no run-time cost).
+  The result is a `TypeInfo`, a built-in struct with one field for now: `name: string`. More fields can be added later.
+- `typeof` gives the declared type. For a union or `anyerror` that is the union (`Shape`, `anyerror`), not the member inside.
+- The member stored in a union (or the class of an `anyerror`) is a run-time fact, so it is not `typeof`. It comes from an ordinary function,
+  `std::types::runtime_type(e)` (D-096), built with slice 11 when `std` exists. It evaluates `e` once and returns a different struct:
+  `RuntimeTypeInfo { name: string, declared: TypeInfo, tag: int, isUnion: bool }`. `name` is the stored member (`Circle`), `declared` is
+  what `typeof(e)` gives (`Shape`), `tag` is the index of the stored member in the union (0 for a type that is not a union) and
+  `isUnion` says whether the declared type is a union, a result or `anyerror`. For a type that is not a union, `name` equals `declared.name`.
+  It reads the union's tag (no .NET reflection); for `anyerror` it reads the object's class name. `std::mem` is for memory facts such as size.
+- The text of `name` is the one the compiler uses in its error messages (`int`, `(x: int, y: int)`, `Shape`, `ParseError!int`).
+- `TypeInfo` lives in the built-in module `std::types` (D-097) and is not a name every file has. `typeof(x).name` needs no import, because
+  the result is reached through its field. To *write* the name (`fn f(t: TypeInfo)`, `let t: TypeInfo`, `TypeInfo { name = "x" }`) a file
+  imports it: `using std::types::TypeInfo` or `using std::types::{TypeInfo}`. Without the import the name is an unknown type, and the message
+  says which import to add. A file may declare its own `TypeInfo` as long as it does not import this one (the two are different
+  types; the built-in one is emitted as `Nir.TypeInfo`). Nothing else is in `std` yet; any other `std` path is "not found".
+  `print` does not take a struct and `==` on structs is not there yet, so write
+  `typeof(x).name`; comparing two types is not possible until `==` on structs is (backlog).
+- No size yet: it can come later as a `size` field or a separate `sizeof(x)` (D-094).
+
 ## 2. Type declarations [struct locked, tuple locked]
 
 One form: `type Name = <shape>`. Struct and tuple use the same form, so `type` vs `const` is gone.
@@ -565,7 +600,8 @@ let same = Enumerable::Sum(nums)         // the full path always works, no impor
 
 ### `std` is separate from `clr`
 
-`std` is Nir's own library. It may later wrap BCL calls, for example `std::fs::File::read_all_text`
+Slice 9d added the first member, `std::types::TypeInfo`, as a small built-in table the compiler knows (D-097); the module system of slice 11
+replaces the table. `std` is Nir's own library. It may later wrap BCL calls, for example `std::fs::File::read_all_text`
 calling `IO.File.ReadAllText` internally. In v1, `std` is only a small prelude [proposed] (`print` and a few basics).
 Everything else comes from `clr::cs`.
 

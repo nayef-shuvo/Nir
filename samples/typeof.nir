@@ -1,0 +1,39 @@
+// typeof(x) tells the type of a variable or expression. It is worked out while compiling and returns a TypeInfo, a built-in
+// struct with one field for now: name. The operand is never run. typeof(x).name needs no import; writing the name TypeInfo does.
+using std::types::TypeInfo
+
+type Point = struct { x: int, y: long }
+type Shape = union { int, string }
+
+fn noisy() -> int {
+    print("never printed: typeof does not run its operand")
+    return 1
+}
+
+fn describe(info: TypeInfo) -> string {
+    return $"a value of type {info.name}"
+}
+
+fn main() {
+    let count = 5_byte
+    let price = 19.99_decimal
+    let p = Point { x = 1, y = 2 }
+
+    print(typeof(count).name)             // byte
+    print(typeof(1_byte + 9).name)         // byte: any expression works
+    print(typeof(p).name)                 // Point
+    print(typeof(p.y).name)               // long
+    print(typeof(noisy()).name)           // int, and noisy() does not run
+    print(typeof((count, price)).name)    // (byte, decimal)
+
+    // A type can be written out instead of a variable.
+    print(typeof(Shape).name)             // Shape
+
+    // For a union you get the declared type. Which member is stored is a run-time question (a later std function).
+    let s: Shape = "text"
+    print(typeof(s).name)                 // Shape
+
+    // The result is an ordinary value: keep it, pass it, put it in a struct.
+    let info = typeof(price)
+    print(describe(info))                 // a value of type decimal
+}

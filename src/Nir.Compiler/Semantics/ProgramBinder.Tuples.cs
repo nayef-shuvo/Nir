@@ -63,7 +63,7 @@ internal sealed partial class ProgramBinder
                     return type;
                 }
 
-                Error(DiagnosticCodes.UnknownType, $"unknown type '{reference.Name.Text}'", reference.Name.Span);
+                Error(DiagnosticCodes.UnknownType, UnknownTypeMessage(reference.Name.Text), reference.Name.Span);
                 return TypeSymbol.ErrorType;
 
             case TupleTypeSyntax tuple:

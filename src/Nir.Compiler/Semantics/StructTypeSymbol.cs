@@ -6,11 +6,15 @@ namespace Nir.Compiler.Semantics;
 /// <summary>A struct declared with <c>type Name = struct { ... }</c>: a value type with named fields.</summary>
 public sealed class StructTypeSymbol : TypeSymbol
 {
-    internal StructTypeSymbol(StructDeclaration declaration)
+    internal StructTypeSymbol(StructDeclaration declaration, string? clrName = null)
         : base(declaration.Name.Text)
     {
         Declaration = declaration;
+        ClrName = clrName ?? declaration.Name.Text;
     }
+
+    /// <summary>The name of the type in the compiled program: the Nir name, except for the built-in <c>TypeInfo</c>.</summary>
+    public string ClrName { get; }
 
     public StructDeclaration Declaration { get; }
 

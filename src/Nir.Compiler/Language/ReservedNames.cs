@@ -15,6 +15,9 @@ public static class ReservedNames
     /// <summary>The field that gives an error its message.</summary>
     public const string MessageField = "message";
 
+    /// <summary>The field of <c>TypeInfo</c> that holds the type's name.</summary>
+    public const string TypeInfoNameField = "name";
+
     /// <summary>The class that holds the compiled functions; no type may have this name.</summary>
     public const string ProgramClass = "Program";
 

@@ -460,6 +460,14 @@ public class LexerTests
     }
 
     [Fact]
+    public void Typeof_is_a_keyword_and_a_newline_after_it_does_not_end_a_statement()
+    {
+        Assert.Equal("TYPEOF LPAREN IDENTIFIER RPAREN SEMI EOF", TokenFormatter.Names("typeof(x)"));
+        Assert.Equal("TYPEOF LPAREN IDENTIFIER RPAREN SEMI EOF", TokenFormatter.Names("typeof\n(x)"));
+        Assert.Equal("IDENTIFIER IDENTIFIER SEMI EOF", TokenFormatter.Names("typeofx typeof_"));
+    }
+
+    [Fact]
     public void As_is_a_keyword()
     {
         Assert.Equal("IDENTIFIER AS IDENTIFIER SEMI EOF", TokenFormatter.Names("x as int"));

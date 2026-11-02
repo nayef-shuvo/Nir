@@ -94,6 +94,7 @@ builds the bound tree. `Binder.cs` is the tiny static entry (`Binder.Bind(unit, 
 | `.Unions.cs` | Union declarations, **`Convert`** (the one place a value becomes a union), `match`. |
 | `.Errors.cs` | `E!T` types, `error` values, `try`, `catch`, protected .NET calls and protected `as` conversions. |
 | `.Literals.cs` | Number and character literals: `BindNumberLiteral` (suffix, range check), `Adapt` (a literal takes the type of its context), pending literals, `BindStatement` (reports literals nothing typed). |
+| `.Typeof.cs` | `typeof(x)`: `BindTypeof`, the built-in struct `std::types::TypeInfo { name }` made on first use (`TypeInfo()`), found by name only after `using std::types::TypeInfo` (`FindStruct`). Becomes a `BoundStructLiteral` of constants. |
 | `NumberTypes.cs` | Which primitive types are integers / signed / narrow / countable / ordered, and `Parse` (read a literal's text as a given type). The one place that knows. |
 | `TypeSymbol.cs` | Base type: the 12 number and char types, `bool`, `string`, `()`, error type. **`==` compares types** (tuples and results structurally). |
 | `StructTypeSymbol.cs` (+ `FieldSymbol`) | Struct or error type, its fields and methods. |
@@ -133,7 +134,7 @@ Rule: unit tests per phase + end-to-end tests that compile and run real programs
 | Folder | Tests |
 |---|---|
 | `Lexing/` | `LexerTests`: token streams (`TokenFormatter` prints them). |
-| `Parsing/` | `ParserTests`, `TupleParserTests`, `UnionParserTests`, `ErrorParserTests` (trees via `AstFormatter`), string escapes, syntax-error wording. |
+| `Parsing/` | `ParserTests`, `TupleParserTests`, `UnionParserTests`, `ErrorParserTests`, `TypeofParserTests` (trees via `AstFormatter`), string escapes, syntax-error wording. |
 | `Semantics/` | One binder test file per feature: expressions, control flow, strings, imports, member calls, structs, methods, borrows, tuples, unions, errors, .NET errors. Assertions use `"NIR3001 5:13"` = code, line:column. |
 | `Emit/` | End-to-end: compile with `TestHost.Run`, run `dotnet`, compare output. One file per feature. |
 | `Programs/sliceN/` | Golden programs: `name.nir` + `name.stdout` (must run and print that) or `name.diag` (must fail with these `line:col CODE`s). Add a program = add two files, no C#. |

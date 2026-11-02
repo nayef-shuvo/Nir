@@ -1,0 +1,5 @@
+// Expect: NIR2011 "'size' is not a member of 'TypeInfo'" on line 4.
+fn main() {
+    let n = 5
+    print(typeof(n).size)
+}

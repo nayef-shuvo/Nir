@@ -240,7 +240,7 @@ internal sealed partial class ProgramBinder
 
     // The built-in types and the structs of this file.
     private TypeSymbol? LookupType(string name) =>
-        LookupPrimitive(name) ?? (name == ReservedNames.SelfType ? _selfType : _structs.GetValueOrDefault(name)) ??
+        LookupPrimitive(name) ?? (name == ReservedNames.SelfType ? _selfType : FindStruct(name)) ??
         (_aliasDeclarations.ContainsKey(name) ? ResolveAlias(name) : null) ??
         (_unionDeclarations.ContainsKey(name) ? ResolveUnion(name) : null);
 

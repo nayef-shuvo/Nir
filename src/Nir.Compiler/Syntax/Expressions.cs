@@ -49,6 +49,12 @@ public sealed record SelfExpression(TextSpan Span) : Expression(Span);
 /// <summary><c>&amp;operand</c> or <c>&amp;mut operand</c>: a reference to a variable.</summary>
 public sealed record ReferenceExpression(Expression Operand, bool IsMutable, TextSpan Span) : Expression(Span);
 
+/// <summary>
+/// <c>typeof(operand)</c>: the type of a variable or expression, or of a type written by name. Exactly one of <paramref name="Type"/>
+/// and <paramref name="Value"/> is set. A plain name is read as a <paramref name="Type"/>; the binder checks for a variable first.
+/// </summary>
+public sealed record TypeofExpression(TypeSyntax? Type, Expression? Value, TextSpan Span) : Expression(Span);
+
 /// <summary>A use of a variable by name.</summary>
 public sealed record NameExpression(Identifier Name, TextSpan Span) : Expression(Span);
 

@@ -230,8 +230,10 @@ expression
       elements+=expression (COMMA elements+=expression)+ COMMA? {_structLiteralsForbidden = _savedStructLiteralsForbidden.Pop();} RPAREN   # tupleLiteralExpr
     | LPAREN {_savedStructLiteralsForbidden.Push(_structLiteralsForbidden); _structLiteralsForbidden = 0;}
       inner=expression {_structLiteralsForbidden = _savedStructLiteralsForbidden.Pop();} RPAREN   # parenthesizedExpression
+    | TYPEOF LPAREN {_savedStructLiteralsForbidden.Push(_structLiteralsForbidden); _structLiteralsForbidden = 0;}
+      typeofOperand {_structLiteralsForbidden = _savedStructLiteralsForbidden.Pop();} RPAREN   # typeofExpr
     | stringLiteral                                                     # stringExpr
-    | interpolatedString                                                # interpolatedStringExpr
+    | interpolatedString                                               # interpolatedStringExpr
     | INT_LITERAL                                                       # intExpr
     | DOUBLE_LITERAL                                                    # doubleExpr
     | CHAR_LITERAL                                                      # charExpr
@@ -240,6 +242,13 @@ expression
     | SELF                                                              # selfExpr
     | {_structLiteralsForbidden == 0}? typeName=IDENTIFIER LBRACE fieldInitializerList? RBRACE   # structLiteralExpr
     | IDENTIFIER                                                        # nameExpr
+    ;
+
+// What `typeof(...)` looks at. A type is tried first, so a plain name is read as a type syntax and the binder decides whether it
+// is a variable or a type; anything that is not a type (`x + 1`, `p.x`, `5`) is an expression.
+typeofOperand
+    : type=typeSyntax
+    | value=expression
     ;
 
 // `c: Circle => expression` or `c: Circle => { statements }`. The name may be `_` to drop the value.

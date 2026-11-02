@@ -35,7 +35,7 @@ internal sealed partial class ProgramBinder
         var error = LookupType(syntax.Error.Text);
         if (error is null)
         {
-            Error(DiagnosticCodes.UnknownType, $"unknown type '{syntax.Error.Text}'", syntax.Error.Span);
+            Error(DiagnosticCodes.UnknownType, UnknownTypeMessage(syntax.Error.Text), syntax.Error.Span);
             failed = true;
         }
         else if (error == TypeSymbol.ErrorType)

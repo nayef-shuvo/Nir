@@ -143,7 +143,7 @@ internal sealed partial class ProgramBinder
         }
         else
         {
-            Error(DiagnosticCodes.UnknownType, $"unknown type '{name.Text}'", name.Span);
+            Error(DiagnosticCodes.UnknownType, UnknownTypeMessage(name.Text), name.Span);
         }
 
         return null;

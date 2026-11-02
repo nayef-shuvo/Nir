@@ -1,0 +1,78 @@
+// typeof(x) gives a TypeInfo { name } worked out while compiling. Its operand is never run.
+using std::types::TypeInfo
+
+type Point = struct { x: int, y: long }
+type Shape = union { int, string }
+type Failure = error { message: string }
+
+fn side() -> int {
+    print("this must not print")
+    return 1
+}
+
+fn show(info: TypeInfo) {
+    print($"  info.name = {info.name}")
+}
+
+fn kind(p: &Point) -> string {
+    return typeof(p).name
+}
+
+fn main() {
+    print("numbers")
+    print(typeof(1_byte).name)
+    print(typeof(1_sbyte).name)
+    print(typeof(1_short).name)
+    print(typeof(1_ushort).name)
+    print(typeof(1).name)
+    print(typeof(1_uint).name)
+    print(typeof(1_long).name)
+    print(typeof(1_ulong).name)
+    print(typeof(1_float).name)
+    print(typeof(1.5).name)
+    print(typeof(1.5_decimal).name)
+
+    print("other primitives")
+    print(typeof('c').name)
+    print(typeof(true).name)
+    print(typeof("s").name)
+
+    print("variables and expressions")
+    let total = 5_long
+    print(typeof(total).name)
+    print(typeof(total + 1).name)
+    print(typeof(total > 1).name)
+    print(typeof(total as byte).name)
+    print(typeof(side()).name)
+
+    print("aggregates")
+    let p = Point { x = 1, y = 2 }
+    let pair = (1, "a")
+    print(typeof(p).name)
+    print(typeof(p.y).name)
+    print(typeof(pair).name)
+    print(typeof(pair.0).name)
+    print(typeof((total, pair)).name)
+    print(kind(&p))
+
+    print("declared, not stored")
+    let s: Shape = 5
+    let r: Failure!int = 5
+    let e: anyerror = error "boom"
+    print(typeof(s).name)
+    print(typeof(r).name)
+    print(typeof(e).name)
+
+    print("type names")
+    print(typeof(int).name)
+    print(typeof(Point).name)
+    print(typeof(Failure!int).name)
+    print(typeof((int, string)).name)
+
+    print("the result is a value")
+    let info = typeof(total)
+    show(info)
+    show(typeof("x"))
+    show(TypeInfo { name = "made by hand" })
+    print(typeof(info).name)
+}

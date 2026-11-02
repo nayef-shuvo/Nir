@@ -431,6 +431,7 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
         NirParser.StringExprContext s => s.stringLiteral() is { } literal ? BuildStringLiteral(literal) : null,
         NirParser.InterpolatedStringExprContext i => i.interpolatedString() is { } interpolated ? BuildInterpolated(interpolated) : null,
         NirParser.CastExpressionContext c => BuildCast(c),
+        NirParser.TypeofExprContext t => BuildTypeof(t),
         NirParser.IntExprContext i => new IntLiteralExpression(i.INT_LITERAL().GetText(), SpanOf(i)),
         NirParser.DoubleExprContext d => new DoubleLiteralExpression(d.DOUBLE_LITERAL().GetText(), SpanOf(d)),
         NirParser.CharExprContext c => BuildCharLiteral(c.CHAR_LITERAL().Symbol),
@@ -542,6 +543,17 @@ internal sealed class AstBuilder(SourceText source, DiagnosticBag diagnostics)
     {
         var elements = context._elements.Select(BuildExpression).ToList();
         return elements.Any(e => e is null) ? null : new TupleLiteralExpression([.. elements.OfType<Expression>()], SpanOf(context));
+    }
+
+    private TypeofExpression? BuildTypeof(NirParser.TypeofExprContext context)
+    {
+        var operand = context.typeofOperand();
+        if (operand?.type is { } typeContext)
+        {
+            return BuildTypeSyntax(typeContext) is { } type ? new TypeofExpression(type, null, SpanOf(context)) : null;
+        }
+
+        return BuildExpression(operand?.value) is { } value ? new TypeofExpression(null, value, SpanOf(context)) : null;
     }
 
     private ReferenceExpression? BuildReference(NirParser.ReferenceExpressionContext context)

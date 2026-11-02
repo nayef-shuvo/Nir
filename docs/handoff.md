@@ -6,11 +6,12 @@ Written at the end of a long working session so the next one can start without t
 ## 1. Where things stand
 
 - Repo: `/mnt/Codes/Project/Nir` (it was `Nir2` until the old `Nir` was removed and this one renamed), branch `main`, working tree clean, **nothing is pushed** (never push unless asked).
-- Last commit: `b42177c` "Add the bank demo app and a test that every sample works".
-- `dotnet build` finishes with 0 warnings and 0 errors; `dotnet test` passes 1830 tests (slice 9c is done and uncommitted when this line was updated).
+- Last commit: `068bde6` "Add slice 9c: the rest of the primitive types".
+- `dotnet build` finishes with 0 warnings and 0 errors; `dotnet test` passes 1916 tests (slices 9c and 9d: 9c is committed, 9d is done and uncommitted when this line was updated).
 - Done slices: 1 hello world, 2 bindings and arithmetic, 3 functions, 4 C# interop, 5 control flow, 6 strings and conversions,
   7 structs / methods / borrows, 8a tuples, 8b unions and `match`, 9a errors in Nir, 9b `try` / `catch` on .NET calls,
-  9c the rest of the primitive types (`byte sbyte short ushort uint long ulong float decimal char`; D-083 to D-092).
+  9c the rest of the primitive types (`byte sbyte short ushort uint long ulong float decimal char`; D-083 to D-092),
+  9d `typeof(x)` returning `std::types::TypeInfo { name }` (D-093, D-094, D-096, D-097; the run-time `std::types::runtime_type` is a slice 11 task).
   Since slice 9b: the emitter was split into partial files, the language and .NET names became constants, reflection lookups are
   cached, a VS Code highlighting extension was added (`editors/vscode-nir/`), a demo app was written (`samples/apps/bank.nir`),
   and `SamplesTests` keeps every sample working.
@@ -83,6 +84,8 @@ offer to pull properties (and then arrays) forward. Slice 11 is modules (`namesp
 - **Number literals (slice 9c).** A literal without a suffix is a `BoundNumberLiteral` with `CanAdapt`; `Convert` and `MatchLiteral` give it the
   type of its context (`ProgramBinder.Literals.cs`). A whole number too big for `int` waits in `_pendingLiterals` until its statement is bound.
   `NumberTypes` is the one place that classifies number types; do not list types elsewhere. `try` binds tighter than `as`: `try (x as byte)`.
+- **`typeof` (slice 9d).** It binds to a plain `BoundStructLiteral` of the built-in `TypeInfo` (made on first use by `ProgramBinder.TypeInfo()`; the name is found only through
+  `using std::types::TypeInfo`, see `FindStruct`); the grammar tries a type before an expression, so a plain name arrives as a type and the binder checks variables first.
 - **Do not kill a running `dotnet build`.** The first build downloads a JRE (about 40 MB, slow on this machine) into `~/.jre`; interrupting it
   leaves a half-extracted folder and "Cannot find Java executable". Delete `~/.jre/jdk-*` and the tarball and let one build finish.
   Also, stale MSBuild nodes can hang a build: `dotnet build-server shutdown`.
@@ -128,7 +131,7 @@ offer to pull properties (and then arrays) forward. Slice 11 is modules (`namesp
 | Compiler design in depth, diagnostics table | `docs/architecture.md` |
 | Coding, testing, git, naming rules | `docs/practices.md` |
 | Slices, tasks, backlog | `docs/roadmap.md` |
-| Why things are the way they are (D-001 ... D-081) | `docs/decisions.md` |
+| Why things are the way they are (D-001 ... D-096) | `docs/decisions.md` |
 | Example programs, error samples, the bank demo | `samples/`, `samples/apps/bank.nir` |
 | Editor support | `editors/vscode-nir/` (open that folder and press F5; its `.vscode/launch.json` is gitignored) |
 

@@ -54,7 +54,14 @@ internal sealed partial class ProgramBinder(SourceText source, DiagnosticBag dia
             .Select(BindFunction)
             .ToImmutableArray();
 
-        return _hadError || entryPoint is null ? null : new BoundProgram([.. _structs.Values], [.. _unionOrder, .. _resultOrder], functions, entryPoint);
+        // The built-in TypeInfo is in the program when a `typeof` or an import needed it.
+        List<StructTypeSymbol> structs = [.. _structs.Values];
+        if (_typeInfo is not null)
+        {
+            structs.Add(_typeInfo);
+        }
+
+        return _hadError || entryPoint is null ? null : new BoundProgram([.. structs], [.. _unionOrder, .. _resultOrder], functions, entryPoint);
     }
 
     // Resolves a function's signature. This happens for every function before any body is bound.

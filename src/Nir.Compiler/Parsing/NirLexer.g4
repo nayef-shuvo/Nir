@@ -31,6 +31,7 @@ MATCH: 'match';
 ERROR: 'error';
 TRY: 'try';
 CATCH: 'catch';
+TYPEOF: 'typeof';
 IMPL: 'impl';
 SELF: 'self';
 TRUE: 'true';

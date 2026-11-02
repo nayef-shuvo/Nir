@@ -36,6 +36,8 @@ Update this block whenever a task is completed.
   next to `int double bool string`; literals take their type from context or a suffix (`200_byte`); `as` is checked between all number
   types and `char`; `catch` works on `as`; ranges run over any integer type and `char`. `samples/test.nir` is the user's scratch file:
   never commit it, never depend on it.
+- Slice 9d (`typeof`): **done** (1916 tests green). `typeof(x)` (a variable, an expression or a type name) is worked out while compiling and
+  returns the built-in struct `std::types::TypeInfo { name }` (import it with `using std::types::TypeInfo` to write its name); the operand never runs. The run-time half, `std::types::runtime_type(x)`, waits for slice 11.
 - Next: **slice 10 (heap references)**. Ask the user its open design decisions first (design.md sections 3, 4, 6, 7, 12), then
   write the `T10.x` tasks in `docs/roadmap.md`.
 

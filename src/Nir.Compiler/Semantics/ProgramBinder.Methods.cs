@@ -26,6 +26,12 @@ internal sealed partial class ProgramBinder
                 continue;
             }
 
+            if (owner == _typeInfo)
+            {
+                Error(DiagnosticCodes.NotAStruct, $"cannot add methods to the built-in type '{owner.Name}'", impl.TypeName.Span);
+                continue;
+            }
+
             foreach (var method in impl.Methods)
             {
                 if (owner.FindMethod(method.Name.Text) is not null)
@@ -41,7 +47,7 @@ internal sealed partial class ProgramBinder
 
     // A struct named in code: `Self` inside an impl, or one of the structs of this file.
     private StructTypeSymbol? StructNamed(Identifier name) =>
-        name.Text == ReservedNames.SelfType ? _selfType : _structs.GetValueOrDefault(name.Text);
+        name.Text == ReservedNames.SelfType ? _selfType : FindStruct(name.Text);
 
     // The struct behind a value or a borrow of one; null for any other type.
     private static StructTypeSymbol? StructOf(TypeSymbol type) => type switch

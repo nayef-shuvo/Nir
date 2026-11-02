@@ -1,0 +1,8 @@
+// Expect: NIR2006 "unknown type 'TypeInfo'; import it with 'using std::types::TypeInfo'" on line 2.
+fn show(info: TypeInfo) {
+    print(info.name)
+}
+
+fn main() {
+    show(typeof(1))
+}

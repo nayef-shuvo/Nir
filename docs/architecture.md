@@ -584,6 +584,25 @@ constructor). Integer `+ - *` are `add.ovf` / `sub.ovf` / `mul.ovf`, the `.un` f
 of types. `a..=b` runs the body, then stops when the counter equals `b` instead of adding one more, so it works for the largest
 value of the type.
 
+### Slice 9d: `typeof` (D-093, D-094, D-096)
+
+**Syntax.** `TYPEOF` is a keyword. The grammar rule `typeofOperand` is `typeSyntax | expression`, so a type is tried first: a plain name
+(`x`, `int`, `Point`), a tuple type or `E!T` comes out as `TypeofExpression.Type`, anything else (`x + 1`, `p.x`, `f(1)`, `5`, `self`)
+as `TypeofExpression.Value`. Parentheses reset the "struct literals forbidden" counter, like any other parenthesised expression.
+
+**Binder** (`ProgramBinder.Typeof.cs`). `BindTypeof` works out the operand's *declared* type and returns an ordinary
+`BoundStructLiteral(TypeInfo, name = BoundStringLiteral(type.Name))`; there is no `BoundTypeof` node and the emitter has nothing
+new to do. A plain name is a variable if one is in scope (so `typeof(p)` for `p: &Point` is `&Point`, the borrow is kept), otherwise
+a type; neither is `NIR2001`. An unnamed tuple type is read element by element the same way, so `typeof((a, b))` works on variables.
+The operand is bound, so its mistakes are reported, but it is not in the bound tree, so it never runs. `TypeInfo` is a
+`StructTypeSymbol` the binder makes by hand (a synthesised `StructDeclaration` with the field `name: string`) the first time
+anything needs it (a `typeof`, or the import), and it is kept in `_typeInfo`, not in `_structs`, so a program that never uses it does not
+contain it. The name `TypeInfo` reaches it only through `using std::types::TypeInfo` (D-097): `ImportStd` puts a `StdTypeName` in
+`_imports`, `FindStruct` looks there after the file's own structs, and an unknown `TypeInfo` gets a message that names the import. The
+`std` table is hard-coded (one name) until slice 11. A file may declare its own `TypeInfo` unless it imports this one (`NIR2013`
+"already imported"); `impl` on the built-in one is `NIR2014`. It is emitted as `Nir.TypeInfo` (`StructTypeSymbol.ClrName`), so it never
+clashes with a type of the program.
+
 Slice 5 emit additions (`BodyEmitter`): a stack of `(Break, Continue)` labels for the loops being emitted.
 - `if`: `brfalse` to the else label. The `br` over the else part and the end label are emitted only when the then-block can fall
   through (`BoundFlow.AlwaysReturns` is false), so a function that ends in an `if` / `else` where both branches return has no

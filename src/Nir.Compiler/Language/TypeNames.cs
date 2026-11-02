@@ -37,6 +37,9 @@ public static class TypeNames
     /// <summary>The type of any error.</summary>
     public const string AnyErrorType = "anyerror";
 
+    /// <summary>The struct that <c>typeof</c> returns. Built in: a program cannot declare a type with this name.</summary>
+    public const string TypeInfoType = "TypeInfo";
+
     /// <summary>The type of an expression that already had an error (never written in source).</summary>
     public const string UnknownType = "?";
 }

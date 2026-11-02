@@ -1,0 +1,16 @@
+// Mistakes with typeof and std::types::TypeInfo. Each one is reported once, at the name that is wrong.
+using std::types::TypeInfo
+using std::types::Nope
+using std::other::TypeInfo
+type TypeInfo = struct { a: int }
+TypeInfo impl {
+    fn f(&self) { }
+}
+
+fn main() {
+    let a = typeof(nope).name
+    let b = typeof(Nope!int).name
+    let c = typeof(1).size
+    let d = typeof(1 + "a").name
+    let f: int = typeof(1)
+}

@@ -20,6 +20,7 @@ src/Nir.Cli/bin/Debug/net10.0/nir run samples/arithmetic.nir
 | `conversions.nir` | `as` between `int` and `double` |
 | `numbers.nir` | all the number types, literals that take their type from context, `_long` suffixes, `decimal`, checked `as`, `catch` on a conversion |
 | `characters.nir` | `char`, `'a'`, `as` to and from integers, ranges over `char` and other integer types |
+| `typeof.nir` | `typeof(x).name`: the type of a variable, an expression or a type written out, worked out at compile time, operand not run; `using std::types::TypeInfo` |
 | `control_flow.nir` | `if` / `else if` / `else`, `while`, `for` with `..` and `..=`, `break`, `continue`, `&&` `||` `!` |
 | `recursion.nir` | factorial, fibonacci, mutual recursion |
 | `dotnet_math.nir` | `using clr::cs::...`, `Math::Sqrt`, `Int32::Parse`, `Console::WriteLine` |
